@@ -1,0 +1,9 @@
+{
+ "tier": "easy",
+ "source": "input.md",
+ "note": "Markdown manuscript with two display equations. Expect an equation + plot animation of softmax temperature.",
+ "config": {
+  "max_plans": 2,
+  "audience": "undergrad"
+ }
+}

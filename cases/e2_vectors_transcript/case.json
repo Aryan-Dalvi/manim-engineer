@@ -1,0 +1,9 @@
+{
+ "tier": "easy",
+ "source": "transcript.json",
+ "note": "YouTube transcript of 3Blue1Brown 'Vectors' (10 min). Expect a geometric vector animation or two.",
+ "config": {
+  "max_plans": 2,
+  "audience": "undergrad"
+ }
+}

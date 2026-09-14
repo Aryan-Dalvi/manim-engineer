@@ -1,0 +1,9 @@
+{
+ "tier": "challenging",
+ "source": "input.md",
+ "note": "Beyond the article: swizzle as a GF(2) linear map, CuTe composed layouts and WGMMA atoms, Hopper TMA hardware swizzle, Triton's shared encodings, FlashAttention-3 / Blackwell usage, padding trade-offs, automatic layout search, AMD's LDS analogue. Researched from primary sources.",
+ "config": {
+  "max_plans": 8,
+  "audience": "expert"
+ }
+}

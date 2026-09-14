@@ -1,0 +1,12 @@
+{
+ "tier": "challenging",
+ "source": "transcript.json",
+ "companion": [
+  "companion_equations.md"
+ ],
+ "note": "3Blue1Brown attention transcript fused with the paper's equations as companion material; plans should cite the verbatim equations.",
+ "config": {
+  "max_plans": 3,
+  "audience": "grad"
+ }
+}

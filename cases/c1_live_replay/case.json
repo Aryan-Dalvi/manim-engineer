@@ -1,0 +1,11 @@
+{
+ "tier": "challenging",
+ "source": "transcript.json",
+ "mode": "live",
+ "chunk": 4,
+ "note": "20-minute window of Karpathy 'Let's build GPT' (self-attention section) replayed as a live stream; plans are emitted while the transcript is still growing.",
+ "config": {
+  "max_plans": 4,
+  "audience": "grad"
+ }
+}

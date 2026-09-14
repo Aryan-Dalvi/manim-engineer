@@ -1,0 +1,12 @@
+{
+ "tier": "challenging",
+ "source": "input.md",
+ "companion": [
+  "companion_equations.md"
+ ],
+ "note": "Ben's friend's article 'Swizzling explained properly' (scallion3008.github.io/swizzling), cleaned into a manuscript with the figures described in prose. Expect clips for the bank-conflict picture, the XOR bijection and its proofs, the Swizzle(bits, base, shift) bit layout, the 32B/64B/128B modes, and the benchmark analysis.",
+ "config": {
+  "max_plans": 9,
+  "audience": "grad"
+ }
+}

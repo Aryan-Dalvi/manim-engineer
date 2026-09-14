@@ -1,0 +1,10 @@
+{
+ "tier": "hard",
+ "source": "2603.03251.pdf",
+ "note": "arXiv paper 'Speculative Speculative Decoding' (the source of Shahu's sample video). Manuscript path with dense text; compare against spec_decoding_sample.MP4.",
+ "config": {
+  "max_plans": 3,
+  "audience": "grad",
+  "max_pages": 6
+ }
+}

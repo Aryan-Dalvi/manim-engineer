@@ -1,0 +1,10 @@
+{
+ "tier": "hard",
+ "source": "cs224n-lecture08-transformers.pdf",
+ "note": "Stanford CS224N lecture deck (PDF). Slide-indexed provenance; expect architecture/flow diagrams and an attention derivation.",
+ "config": {
+  "max_plans": 3,
+  "audience": "grad",
+  "max_pages": 34
+ }
+}

@@ -216,3 +216,17 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+.beryl/agent/session-state.md
+*.mp4
+*.MP4
+# manim-engineer
+outputs/
+media/
+cases/**/media/
+cases/**/*.mp3
+cases/**/*.wav
+cases/**/*.pdf
+*.gif
+!docs/**/*.gif
+.manim-engineer-cache/

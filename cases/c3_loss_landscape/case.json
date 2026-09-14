@@ -1,0 +1,9 @@
+{
+ "tier": "challenging",
+ "source": "input.md",
+ "note": "Gradient descent, curvature and momentum: plots with swept parameters and a discrete iteration trace.",
+ "config": {
+  "max_plans": 3,
+  "audience": "undergrad"
+ }
+}

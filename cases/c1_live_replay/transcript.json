@@ -1,0 +1,2386 @@
+{
+ "video_id": "kCc8FmEb1nY",
+ "name": "karpathy_lets_build_gpt_42m_to_62m",
+ "snippets": [
+  {
+   "start": 2521.08,
+   "duration": 3.8,
+   "text": "around"
+  },
+  {
+   "start": 2521.88,
+   "duration": 5.56,
+   "text": "2.5 with the pyr model and then here's"
+  },
+  {
+   "start": 2524.88,
+   "duration": 4.88,
+   "text": "the sample that we produced at the"
+  },
+  {
+   "start": 2527.44,
+   "duration": 4.2,
+   "text": "end and so we have everything packaged"
+  },
+  {
+   "start": 2529.76,
+   "duration": 3.96,
+   "text": "up in the script and we're in a good"
+  },
+  {
+   "start": 2531.64,
+   "duration": 4.32,
+   "text": "position now to iterate on this okay so"
+  },
+  {
+   "start": 2533.72,
+   "duration": 4.56,
+   "text": "we are almost ready to start writing our"
+  },
+  {
+   "start": 2535.96,
+   "duration": 6.68,
+   "text": "very first self attention block for"
+  },
+  {
+   "start": 2538.28,
+   "duration": 5.92,
+   "text": "processing these uh tokens now before we"
+  },
+  {
+   "start": 2542.64,
+   "duration": 3.56,
+   "text": "actually get there I want to get you"
+  },
+  {
+   "start": 2544.2,
+   "duration": 3.88,
+   "text": "used to a mathematical trick that is"
+  },
+  {
+   "start": 2546.2,
+   "duration": 3.96,
+   "text": "used in the self attention inside a"
+  },
+  {
+   "start": 2548.08,
+   "duration": 4.0,
+   "text": "Transformer and is really just like at"
+  },
+  {
+   "start": 2550.16,
+   "duration": 4.72,
+   "text": "the heart of an an efficient"
+  },
+  {
+   "start": 2552.08,
+   "duration": 4.36,
+   "text": "implementation of self attention and so"
+  },
+  {
+   "start": 2554.88,
+   "duration": 3.6,
+   "text": "I want to work with this toy example to"
+  },
+  {
+   "start": 2556.44,
+   "duration": 3.36,
+   "text": "just get you used to this operation and"
+  },
+  {
+   "start": 2558.48,
+   "duration": 4.64,
+   "text": "then it's going to make it much more"
+  },
+  {
+   "start": 2559.8,
+   "duration": 4.6,
+   "text": "clear once we actually get to um to it"
+  },
+  {
+   "start": 2563.12,
+   "duration": 4.52,
+   "text": "uh in the script"
+  },
+  {
+   "start": 2564.4,
+   "duration": 5.84,
+   "text": "again so let's create a b BYT by C where"
+  },
+  {
+   "start": 2567.64,
+   "duration": 5.44,
+   "text": "BT and C are just 48 and two in the toy"
+  },
+  {
+   "start": 2570.24,
+   "duration": 5.56,
+   "text": "example and these are basically channels"
+  },
+  {
+   "start": 2573.08,
+   "duration": 4.96,
+   "text": "and we have uh batches and we have the"
+  },
+  {
+   "start": 2575.8,
+   "duration": 5.28,
+   "text": "time component and we have information"
+  },
+  {
+   "start": 2578.04,
+   "duration": 5.4,
+   "text": "at each point in the sequence so"
+  },
+  {
+   "start": 2581.08,
+   "duration": 5.12,
+   "text": "see now what we would like to do is we"
+  },
+  {
+   "start": 2583.44,
+   "duration": 5.32,
+   "text": "would like these um tokens so we have up"
+  },
+  {
+   "start": 2586.2,
+   "duration": 4.12,
+   "text": "to eight tokens here in a batch and"
+  },
+  {
+   "start": 2588.76,
+   "duration": 2.84,
+   "text": "these eight tokens are currently not"
+  },
+  {
+   "start": 2590.32,
+   "duration": 2.84,
+   "text": "talking to each other and we would like"
+  },
+  {
+   "start": 2591.6,
+   "duration": 5.76,
+   "text": "them to talk to each other we'd like to"
+  },
+  {
+   "start": 2593.16,
+   "duration": 5.6,
+   "text": "couple them and in particular we don't"
+  },
+  {
+   "start": 2597.36,
+   "duration": 4.08,
+   "text": "we we want to couple them in a very"
+  },
+  {
+   "start": 2598.76,
+   "duration": 5.0,
+   "text": "specific way so the token for example at"
+  },
+  {
+   "start": 2601.44,
+   "duration": 4.24,
+   "text": "the fifth location it should not"
+  },
+  {
+   "start": 2603.76,
+   "duration": 4.0,
+   "text": "communicate with tokens in the sixth"
+  },
+  {
+   "start": 2605.68,
+   "duration": 4.04,
+   "text": "seventh and eighth location"
+  },
+  {
+   "start": 2607.76,
+   "duration": 4.08,
+   "text": "because uh those are future tokens in"
+  },
+  {
+   "start": 2609.72,
+   "duration": 3.8,
+   "text": "the sequence the token on the fifth"
+  },
+  {
+   "start": 2611.84,
+   "duration": 4.36,
+   "text": "location should only talk to the one in"
+  },
+  {
+   "start": 2613.52,
+   "duration": 5.2,
+   "text": "the fourth third second and first so"
+  },
+  {
+   "start": 2616.2,
+   "duration": 4.28,
+   "text": "it's only so information only flows from"
+  },
+  {
+   "start": 2618.72,
+   "duration": 3.8,
+   "text": "previous context to the current time"
+  },
+  {
+   "start": 2620.48,
+   "duration": 3.6,
+   "text": "step and we cannot get any information"
+  },
+  {
+   "start": 2622.52,
+   "duration": 3.04,
+   "text": "from the future because we are about to"
+  },
+  {
+   "start": 2624.08,
+   "duration": 5.2,
+   "text": "try to predict the"
+  },
+  {
+   "start": 2625.56,
+   "duration": 6.56,
+   "text": "future so what is the easiest way for"
+  },
+  {
+   "start": 2629.28,
+   "duration": 5.32,
+   "text": "tokens to communicate okay the easiest"
+  },
+  {
+   "start": 2632.12,
+   "duration": 4.16,
+   "text": "way I would say is okay if we're up to"
+  },
+  {
+   "start": 2634.6,
+   "duration": 3.84,
+   "text": "if we're a fifth token and I'd like to"
+  },
+  {
+   "start": 2636.28,
+   "duration": 4.28,
+   "text": "communicate with my past the simplest"
+  },
+  {
+   "start": 2638.44,
+   "duration": 5.12,
+   "text": "way we can do that is to just do a"
+  },
+  {
+   "start": 2640.56,
+   "duration": 5.68,
+   "text": "weight is to just do an average of all"
+  },
+  {
+   "start": 2643.56,
+   "duration": 4.6,
+   "text": "the um of all the preceding elements so"
+  },
+  {
+   "start": 2646.24,
+   "duration": 4.44,
+   "text": "for example if I'm the fif token I would"
+  },
+  {
+   "start": 2648.16,
+   "duration": 5.8,
+   "text": "like to take the channels uh that make"
+  },
+  {
+   "start": 2650.68,
+   "duration": 4.92,
+   "text": "up that are information at my step but"
+  },
+  {
+   "start": 2653.96,
+   "duration": 3.16,
+   "text": "then also the channels from the fourth"
+  },
+  {
+   "start": 2655.6,
+   "duration": 4.16,
+   "text": "step third step second step and the"
+  },
+  {
+   "start": 2657.12,
+   "duration": 4.04,
+   "text": "first step I'd like to average those up"
+  },
+  {
+   "start": 2659.76,
+   "duration": 4.08,
+   "text": "and then that would become sort of like"
+  },
+  {
+   "start": 2661.16,
+   "duration": 5.16,
+   "text": "a feature Vector that summarizes me in"
+  },
+  {
+   "start": 2663.84,
+   "duration": 4.84,
+   "text": "the context of my history now of course"
+  },
+  {
+   "start": 2666.32,
+   "duration": 4.12,
+   "text": "just doing a sum or like an average is"
+  },
+  {
+   "start": 2668.68,
+   "duration": 3.52,
+   "text": "an extremely weak form of interaction"
+  },
+  {
+   "start": 2670.44,
+   "duration": 3.56,
+   "text": "like this communication is uh extremely"
+  },
+  {
+   "start": 2672.2,
+   "duration": 3.52,
+   "text": "lossy we've lost a ton of information"
+  },
+  {
+   "start": 2674.0,
+   "duration": 4.12,
+   "text": "about the spatial Arrangements of all"
+  },
+  {
+   "start": 2675.72,
+   "duration": 3.56,
+   "text": "those tokens uh but that's okay for now"
+  },
+  {
+   "start": 2678.12,
+   "duration": 3.44,
+   "text": "we'll see how we can bring that"
+  },
+  {
+   "start": 2679.28,
+   "duration": 4.52,
+   "text": "information back later for now what we"
+  },
+  {
+   "start": 2681.56,
+   "duration": 4.96,
+   "text": "would like to do is for every single"
+  },
+  {
+   "start": 2683.8,
+   "duration": 5.76,
+   "text": "batch element independently for every"
+  },
+  {
+   "start": 2686.52,
+   "duration": 6.48,
+   "text": "teeth token in that sequence we'd like"
+  },
+  {
+   "start": 2689.56,
+   "duration": 6.0,
+   "text": "to now calculate the average of all the"
+  },
+  {
+   "start": 2693.0,
+   "duration": 5.56,
+   "text": "vectors in all the previous tokens and"
+  },
+  {
+   "start": 2695.56,
+   "duration": 6.0,
+   "text": "also at this token so let's write that"
+  },
+  {
+   "start": 2698.56,
+   "duration": 5.2,
+   "text": "out um I have a small snippet here and"
+  },
+  {
+   "start": 2701.56,
+   "duration": 3.96,
+   "text": "instead of just fumbling around let me"
+  },
+  {
+   "start": 2703.76,
+   "duration": 4.24,
+   "text": "just copy paste it and talk to"
+  },
+  {
+   "start": 2705.52,
+   "duration": 6.88,
+   "text": "it so in other words we're going to"
+  },
+  {
+   "start": 2708.0,
+   "duration": 7.08,
+   "text": "create X and B is short for bag of words"
+  },
+  {
+   "start": 2712.4,
+   "duration": 5.36,
+   "text": "because bag of words is um is kind of"
+  },
+  {
+   "start": 2715.08,
+   "duration": 4.2,
+   "text": "like um a term that people use when you"
+  },
+  {
+   "start": 2717.76,
+   "duration": 3.6,
+   "text": "are just averaging up things so this is"
+  },
+  {
+   "start": 2719.28,
+   "duration": 4.44,
+   "text": "just a bag of words basically there's a"
+  },
+  {
+   "start": 2721.36,
+   "duration": 3.96,
+   "text": "word stored on every one of these eight"
+  },
+  {
+   "start": 2723.72,
+   "duration": 3.72,
+   "text": "locations and we're doing a bag of words"
+  },
+  {
+   "start": 2725.32,
+   "duration": 3.56,
+   "text": "we're just averaging"
+  },
+  {
+   "start": 2727.44,
+   "duration": 3.28,
+   "text": "so in the beginning we're going to say"
+  },
+  {
+   "start": 2728.88,
+   "duration": 3.28,
+   "text": "that it's just initialized at Zero and"
+  },
+  {
+   "start": 2730.72,
+   "duration": 3.76,
+   "text": "then I'm doing a for Loop here so we're"
+  },
+  {
+   "start": 2732.16,
+   "duration": 3.84,
+   "text": "not being efficient yet that's coming"
+  },
+  {
+   "start": 2734.48,
+   "duration": 3.52,
+   "text": "but for now we're just iterating over"
+  },
+  {
+   "start": 2736.0,
+   "duration": 4.88,
+   "text": "all the batch Dimensions independently"
+  },
+  {
+   "start": 2738.0,
+   "duration": 7.32,
+   "text": "iterating over time and then the"
+  },
+  {
+   "start": 2740.88,
+   "duration": 6.96,
+   "text": "previous uh tokens are at this uh batch"
+  },
+  {
+   "start": 2745.32,
+   "duration": 5.96,
+   "text": "Dimension and then everything up to and"
+  },
+  {
+   "start": 2747.84,
+   "duration": 6.48,
+   "text": "including the teeth token okay so when"
+  },
+  {
+   "start": 2751.28,
+   "duration": 7.2,
+   "text": "we slice out X in this way X prev"
+  },
+  {
+   "start": 2754.32,
+   "duration": 5.8,
+   "text": "Becomes of shape um how many T elements"
+  },
+  {
+   "start": 2758.48,
+   "duration": 4.12,
+   "text": "there were in the past and then of"
+  },
+  {
+   "start": 2760.12,
+   "duration": 5.36,
+   "text": "course C so all the two-dimensional"
+  },
+  {
+   "start": 2762.6,
+   "duration": 5.48,
+   "text": "information from these little tokens so"
+  },
+  {
+   "start": 2765.48,
+   "duration": 6.56,
+   "text": "that's the previous uh sort of chunk of"
+  },
+  {
+   "start": 2768.08,
+   "duration": 5.72,
+   "text": "um tokens from my current sequence and"
+  },
+  {
+   "start": 2772.04,
+   "duration": 3.84,
+   "text": "then I'm just doing the average or the"
+  },
+  {
+   "start": 2773.8,
+   "duration": 5.28,
+   "text": "mean over the zero Dimension so I'm"
+  },
+  {
+   "start": 2775.88,
+   "duration": 5.44,
+   "text": "averaging out the time here and I'm just"
+  },
+  {
+   "start": 2779.08,
+   "duration": 4.8,
+   "text": "going to get a little c one dimensional"
+  },
+  {
+   "start": 2781.32,
+   "duration": 6.2,
+   "text": "Vector which I'm going to store in X bag"
+  },
+  {
+   "start": 2783.88,
+   "duration": 6.32,
+   "text": "of words so I can run this and and uh"
+  },
+  {
+   "start": 2787.52,
+   "duration": 5.2,
+   "text": "this is not going to be very informative"
+  },
+  {
+   "start": 2790.2,
+   "duration": 5.2,
+   "text": "because let's see so this is X of Zer so"
+  },
+  {
+   "start": 2792.72,
+   "duration": 7.32,
+   "text": "this is the zeroth batch element and"
+  },
+  {
+   "start": 2795.4,
+   "duration": 7.0,
+   "text": "then expo at zero now you see how the at"
+  },
+  {
+   "start": 2800.04,
+   "duration": 4.96,
+   "text": "the first location here you see that the"
+  },
+  {
+   "start": 2802.4,
+   "duration": 4.32,
+   "text": "two are equal and that's because it's"
+  },
+  {
+   "start": 2805.0,
+   "duration": 4.52,
+   "text": "we're just doing an average of this one"
+  },
+  {
+   "start": 2806.72,
+   "duration": 6.4,
+   "text": "token but here this one is now an"
+  },
+  {
+   "start": 2809.52,
+   "duration": 5.44,
+   "text": "average of these two and now this one is"
+  },
+  {
+   "start": 2813.12,
+   "duration": 4.76,
+   "text": "an average of these"
+  },
+  {
+   "start": 2814.96,
+   "duration": 6.28,
+   "text": "three and so on"
+  },
+  {
+   "start": 2817.88,
+   "duration": 5.16,
+   "text": "so uh and this last one is the average"
+  },
+  {
+   "start": 2821.24,
+   "duration": 4.04,
+   "text": "of all of these elements so vertical"
+  },
+  {
+   "start": 2823.04,
+   "duration": 4.36,
+   "text": "average just averaging up all the tokens"
+  },
+  {
+   "start": 2825.28,
+   "duration": 5.04,
+   "text": "now gives this outcome"
+  },
+  {
+   "start": 2827.4,
+   "duration": 5.56,
+   "text": "here so this is all well and good uh but"
+  },
+  {
+   "start": 2830.32,
+   "duration": 4.08,
+   "text": "this is very inefficient now the trick"
+  },
+  {
+   "start": 2832.96,
+   "duration": 3.48,
+   "text": "is that we can be very very efficient"
+  },
+  {
+   "start": 2834.4,
+   "duration": 3.76,
+   "text": "about doing this using matrix"
+  },
+  {
+   "start": 2836.44,
+   "duration": 3.2,
+   "text": "multiplication so that's the"
+  },
+  {
+   "start": 2838.16,
+   "duration": 3.32,
+   "text": "mathematical trick and let me show you"
+  },
+  {
+   "start": 2839.64,
+   "duration": 4.8,
+   "text": "what I mean let's work with the toy"
+  },
+  {
+   "start": 2841.48,
+   "duration": 6.2,
+   "text": "example here let me run it and I'll"
+  },
+  {
+   "start": 2844.44,
+   "duration": 6.6,
+   "text": "explain I have a simple Matrix here that"
+  },
+  {
+   "start": 2847.68,
+   "duration": 5.96,
+   "text": "is a 3X3 of all ones a matrix B of just"
+  },
+  {
+   "start": 2851.04,
+   "duration": 5.84,
+   "text": "random numbers and it's a 3x2 and a"
+  },
+  {
+   "start": 2853.64,
+   "duration": 6.24,
+   "text": "matrix C which will be 3x3 multip 3x2"
+  },
+  {
+   "start": 2856.88,
+   "duration": 6.92,
+   "text": "which will give out a 3x2 so here we're"
+  },
+  {
+   "start": 2859.88,
+   "duration": 6.32,
+   "text": "just using um matrix multiplication so a"
+  },
+  {
+   "start": 2863.8,
+   "duration": 7.6,
+   "text": "multiply B gives us"
+  },
+  {
+   "start": 2866.2,
+   "duration": 7.84,
+   "text": "C okay so how are these numbers in C um"
+  },
+  {
+   "start": 2871.4,
+   "duration": 6.36,
+   "text": "achieved right so this number in the top"
+  },
+  {
+   "start": 2874.04,
+   "duration": 6.76,
+   "text": "left is the first row of a dot product"
+  },
+  {
+   "start": 2877.76,
+   "duration": 5.12,
+   "text": "with the First Column of B and since all"
+  },
+  {
+   "start": 2880.8,
+   "duration": 5.04,
+   "text": "the the row of a right now is all just"
+  },
+  {
+   "start": 2882.88,
+   "duration": 5.0,
+   "text": "ones then the do product here with with"
+  },
+  {
+   "start": 2885.84,
+   "duration": 5.88,
+   "text": "this column of B is just going to do a"
+  },
+  {
+   "start": 2887.88,
+   "duration": 4.72,
+   "text": "sum of these of this column so 2 + 6 + 6"
+  },
+  {
+   "start": 2891.72,
+   "duration": 3.8,
+   "text": "is"
+  },
+  {
+   "start": 2892.6,
+   "duration": 4.92,
+   "text": "14 the element here in the output of C"
+  },
+  {
+   "start": 2895.52,
+   "duration": 4.68,
+   "text": "is also the first column here the first"
+  },
+  {
+   "start": 2897.52,
+   "duration": 7.64,
+   "text": "row of a multiplied now with the second"
+  },
+  {
+   "start": 2900.2,
+   "duration": 6.16,
+   "text": "column of B so 7 + 4 + 5 is 16 now you"
+  },
+  {
+   "start": 2905.16,
+   "duration": 3.56,
+   "text": "see that there's repeating elements here"
+  },
+  {
+   "start": 2906.36,
+   "duration": 4.12,
+   "text": "so this 14 again is because this row is"
+  },
+  {
+   "start": 2908.72,
+   "duration": 4.72,
+   "text": "again all ones and it's multiplying the"
+  },
+  {
+   "start": 2910.48,
+   "duration": 5.32,
+   "text": "First Column of B so we get 14 and this"
+  },
+  {
+   "start": 2913.44,
+   "duration": 5.92,
+   "text": "one is and so on so this last number"
+  },
+  {
+   "start": 2915.8,
+   "duration": 6.56,
+   "text": "here is the last row do product last"
+  },
+  {
+   "start": 2919.36,
+   "duration": 5.4,
+   "text": "column now the trick here is uh the"
+  },
+  {
+   "start": 2922.36,
+   "duration": 5.72,
+   "text": "following this is just a boring number"
+  },
+  {
+   "start": 2924.76,
+   "duration": 5.96,
+   "text": "of um it's just a boring array of all"
+  },
+  {
+   "start": 2928.08,
+   "duration": 6.12,
+   "text": "ones but torch has this function called"
+  },
+  {
+   "start": 2930.72,
+   "duration": 6.08,
+   "text": "Trail which is short for a"
+  },
+  {
+   "start": 2934.2,
+   "duration": 4.16,
+   "text": "triangular uh something like that and"
+  },
+  {
+   "start": 2936.8,
+   "duration": 3.56,
+   "text": "you can wrap it in torch up once and it"
+  },
+  {
+   "start": 2938.36,
+   "duration": 5.4,
+   "text": "will just return the lower triangular"
+  },
+  {
+   "start": 2940.36,
+   "duration": 6.2,
+   "text": "portion of this"
+  },
+  {
+   "start": 2943.76,
+   "duration": 4.36,
+   "text": "okay so now it will basically zero out"
+  },
+  {
+   "start": 2946.56,
+   "duration": 3.84,
+   "text": "uh these guys here so we just get the"
+  },
+  {
+   "start": 2948.12,
+   "duration": 5.52,
+   "text": "lower triangular part well what happens"
+  },
+  {
+   "start": 2950.4,
+   "duration": 3.24,
+   "text": "if we do"
+  },
+  {
+   "start": 2954.04,
+   "duration": 4.88,
+   "text": "that so now we'll have a like this and B"
+  },
+  {
+   "start": 2957.6,
+   "duration": 4.44,
+   "text": "like this and now what are we getting"
+  },
+  {
+   "start": 2958.92,
+   "duration": 5.6,
+   "text": "here in C well what is this number well"
+  },
+  {
+   "start": 2962.04,
+   "duration": 6.6,
+   "text": "this is the first row times the First"
+  },
+  {
+   "start": 2964.52,
+   "duration": 6.12,
+   "text": "Column and because this is zeros"
+  },
+  {
+   "start": 2968.64,
+   "duration": 4.24,
+   "text": "uh these elements here are now ignored"
+  },
+  {
+   "start": 2970.64,
+   "duration": 4.76,
+   "text": "so we just get a two and then this"
+  },
+  {
+   "start": 2972.88,
+   "duration": 4.36,
+   "text": "number here is the first row times the"
+  },
+  {
+   "start": 2975.4,
+   "duration": 3.88,
+   "text": "second column and because these are"
+  },
+  {
+   "start": 2977.24,
+   "duration": 5.28,
+   "text": "zeros they get ignored and it's just"
+  },
+  {
+   "start": 2979.28,
+   "duration": 4.68,
+   "text": "seven this seven multiplies this one but"
+  },
+  {
+   "start": 2982.52,
+   "duration": 4.24,
+   "text": "look what happened here because this is"
+  },
+  {
+   "start": 2983.96,
+   "duration": 4.32,
+   "text": "one and then zeros we what ended up"
+  },
+  {
+   "start": 2986.76,
+   "duration": 4.48,
+   "text": "happening is we're just plucking out the"
+  },
+  {
+   "start": 2988.28,
+   "duration": 9.08,
+   "text": "row of this row of B and that's what we"
+  },
+  {
+   "start": 2991.24,
+   "duration": 7.76,
+   "text": "got now here we have one 1 Z so here 110"
+  },
+  {
+   "start": 2997.36,
+   "duration": 4.64,
+   "text": "do product with these two columns will"
+  },
+  {
+   "start": 2999.0,
+   "duration": 6.4,
+   "text": "now give us 2 + 6 which is 8 and 7 + 4"
+  },
+  {
+   "start": 3002.0,
+   "duration": 5.8,
+   "text": "which is 11 and because this is 111 we"
+  },
+  {
+   "start": 3005.4,
+   "duration": 4.8,
+   "text": "ended up with the addition of all of"
+  },
+  {
+   "start": 3007.8,
+   "duration": 5.04,
+   "text": "them and so basically depending on how"
+  },
+  {
+   "start": 3010.2,
+   "duration": 6.48,
+   "text": "many ones and zeros we have here we are"
+  },
+  {
+   "start": 3012.84,
+   "duration": 6.04,
+   "text": "basically doing a sum currently of a"
+  },
+  {
+   "start": 3016.68,
+   "duration": 4.04,
+   "text": "variable number of these rows and that"
+  },
+  {
+   "start": 3018.88,
+   "duration": 4.28,
+   "text": "gets deposited into"
+  },
+  {
+   "start": 3020.72,
+   "duration": 4.4,
+   "text": "C So currently we're doing sums because"
+  },
+  {
+   "start": 3023.16,
+   "duration": 4.44,
+   "text": "these are ones but we can also do"
+  },
+  {
+   "start": 3025.12,
+   "duration": 4.84,
+   "text": "average right and you can start to see"
+  },
+  {
+   "start": 3027.6,
+   "duration": 5.04,
+   "text": "how we could do average uh of the rows"
+  },
+  {
+   "start": 3029.96,
+   "duration": 5.24,
+   "text": "of B uh sort of in an incremental"
+  },
+  {
+   "start": 3032.64,
+   "duration": 4.92,
+   "text": "fashion because we don't have to we can"
+  },
+  {
+   "start": 3035.2,
+   "duration": 3.84,
+   "text": "basically normalize these rows so that"
+  },
+  {
+   "start": 3037.56,
+   "duration": 4.4,
+   "text": "they sum to one and then we're going to"
+  },
+  {
+   "start": 3039.04,
+   "duration": 4.52,
+   "text": "get an average so if we took a and then"
+  },
+  {
+   "start": 3041.96,
+   "duration": 9.92,
+   "text": "we did aals"
+  },
+  {
+   "start": 3043.56,
+   "duration": 11.76,
+   "text": "aide torch. sum in the um of a in the um"
+  },
+  {
+   "start": 3051.88,
+   "duration": 5.68,
+   "text": "oneth Dimension and then let's keep them"
+  },
+  {
+   "start": 3055.32,
+   "duration": 5.52,
+   "text": "as true so so therefore the broadcasting"
+  },
+  {
+   "start": 3057.56,
+   "duration": 6.44,
+   "text": "will work out so if I rerun this you see"
+  },
+  {
+   "start": 3060.84,
+   "duration": 6.28,
+   "text": "now that these rows now sum to one so"
+  },
+  {
+   "start": 3064.0,
+   "duration": 5.92,
+   "text": "this row is one this row is 0. 5.5 Z and"
+  },
+  {
+   "start": 3067.12,
+   "duration": 5.68,
+   "text": "here we get 1/3 and now when we do a"
+  },
+  {
+   "start": 3069.92,
+   "duration": 5.88,
+   "text": "multiply B what are we getting here we"
+  },
+  {
+   "start": 3072.8,
+   "duration": 5.36,
+   "text": "are just getting the first row first row"
+  },
+  {
+   "start": 3075.8,
+   "duration": 4.36,
+   "text": "here now we are getting the average of"
+  },
+  {
+   "start": 3078.16,
+   "duration": 5.24,
+   "text": "the first two"
+  },
+  {
+   "start": 3080.16,
+   "duration": 4.92,
+   "text": "rows okay so 2 and six average is four"
+  },
+  {
+   "start": 3083.4,
+   "duration": 4.44,
+   "text": "and four and seven average is"
+  },
+  {
+   "start": 3085.08,
+   "duration": 6.4,
+   "text": "5.5 and on the bottom here we are now"
+  },
+  {
+   "start": 3087.84,
+   "duration": 5.96,
+   "text": "getting the average of these three rows"
+  },
+  {
+   "start": 3091.48,
+   "duration": 5.48,
+   "text": "so the average of all of elements of B"
+  },
+  {
+   "start": 3093.8,
+   "duration": 6.2,
+   "text": "are now deposited here and so you can"
+  },
+  {
+   "start": 3096.96,
+   "duration": 5.44,
+   "text": "see that by manipulating these uh"
+  },
+  {
+   "start": 3100.0,
+   "duration": 4.48,
+   "text": "elements of this multiplying Matrix and"
+  },
+  {
+   "start": 3102.4,
+   "duration": 5.04,
+   "text": "then multiplying it with any given"
+  },
+  {
+   "start": 3104.48,
+   "duration": 5.92,
+   "text": "Matrix we can do these averages in this"
+  },
+  {
+   "start": 3107.44,
+   "duration": 5.68,
+   "text": "incremental fashion because we just get"
+  },
+  {
+   "start": 3110.4,
+   "duration": 4.88,
+   "text": "um and we can manipulate that based on"
+  },
+  {
+   "start": 3113.12,
+   "duration": 4.36,
+   "text": "the elements of a okay so that's very"
+  },
+  {
+   "start": 3115.28,
+   "duration": 3.92,
+   "text": "convenient so let's let's swing back up"
+  },
+  {
+   "start": 3117.48,
+   "duration": 3.36,
+   "text": "here and see how we can vectorize this"
+  },
+  {
+   "start": 3119.2,
+   "duration": 4.44,
+   "text": "and make it much more efficient using"
+  },
+  {
+   "start": 3120.84,
+   "duration": 4.92,
+   "text": "what we've learned so in"
+  },
+  {
+   "start": 3123.64,
+   "duration": 4.64,
+   "text": "particular we are going to produce an"
+  },
+  {
+   "start": 3125.76,
+   "duration": 5.96,
+   "text": "array a but here I'm going to call it we"
+  },
+  {
+   "start": 3128.28,
+   "duration": 6.6,
+   "text": "short for weights but this is our"
+  },
+  {
+   "start": 3131.72,
+   "duration": 5.48,
+   "text": "a and this is how much of every row we"
+  },
+  {
+   "start": 3134.88,
+   "duration": 3.44,
+   "text": "want to average up and it's going to be"
+  },
+  {
+   "start": 3137.2,
+   "duration": 2.84,
+   "text": "an average because you can see that"
+  },
+  {
+   "start": 3138.32,
+   "duration": 5.24,
+   "text": "these rows sum to"
+  },
+  {
+   "start": 3140.04,
+   "duration": 7.76,
+   "text": "one so this is our a and then our B in"
+  },
+  {
+   "start": 3143.56,
+   "duration": 5.76,
+   "text": "this example of course is X"
+  },
+  {
+   "start": 3147.8,
+   "duration": 4.12,
+   "text": "so what's going to happen here now is"
+  },
+  {
+   "start": 3149.32,
+   "duration": 7.24,
+   "text": "that we are going to have an expo"
+  },
+  {
+   "start": 3151.92,
+   "duration": 6.48,
+   "text": "2 and this Expo 2 is going to be way"
+  },
+  {
+   "start": 3156.56,
+   "duration": 6.12,
+   "text": "multiplying"
+  },
+  {
+   "start": 3158.4,
+   "duration": 6.12,
+   "text": "RX so let's think this true way is T BYT"
+  },
+  {
+   "start": 3162.68,
+   "duration": 4.52,
+   "text": "and this is Matrix multiplying in"
+  },
+  {
+   "start": 3164.52,
+   "duration": 6.4,
+   "text": "pytorch a b by T by"
+  },
+  {
+   "start": 3167.2,
+   "duration": 5.76,
+   "text": "C and it's giving us uh different what"
+  },
+  {
+   "start": 3170.92,
+   "duration": 3.88,
+   "text": "shape so pytorch will come here and it"
+  },
+  {
+   "start": 3172.96,
+   "duration": 4.44,
+   "text": "will see that these shapes are not the"
+  },
+  {
+   "start": 3174.8,
+   "duration": 5.32,
+   "text": "same so it will create a batch Dimension"
+  },
+  {
+   "start": 3177.4,
+   "duration": 4.68,
+   "text": "here and this is a batched matrix"
+  },
+  {
+   "start": 3180.12,
+   "duration": 3.88,
+   "text": "multiply and so it will apply this"
+  },
+  {
+   "start": 3182.08,
+   "duration": 5.96,
+   "text": "matrix multiplication in all the batch"
+  },
+  {
+   "start": 3184.0,
+   "duration": 5.8,
+   "text": "elements um in parallel and individually"
+  },
+  {
+   "start": 3188.04,
+   "duration": 4.72,
+   "text": "and then for each batch element there"
+  },
+  {
+   "start": 3189.8,
+   "duration": 6.0,
+   "text": "will be a t BYT multiplying T by C"
+  },
+  {
+   "start": 3192.76,
+   "duration": 7.88,
+   "text": "exactly as we had"
+  },
+  {
+   "start": 3195.8,
+   "duration": 8.8,
+   "text": "below so this will now create B by T by"
+  },
+  {
+   "start": 3200.64,
+   "duration": 7.2,
+   "text": "C and Expo 2 will now become identical"
+  },
+  {
+   "start": 3204.6,
+   "duration": 3.24,
+   "text": "to Expo"
+  },
+  {
+   "start": 3208.12,
+   "duration": 8.28,
+   "text": "so we can see that torch. all close of"
+  },
+  {
+   "start": 3212.32,
+   "duration": 6.52,
+   "text": "xbo and xbo 2 should be true"
+  },
+  {
+   "start": 3216.4,
+   "duration": 6.8,
+   "text": "now so this kind of like convinces us"
+  },
+  {
+   "start": 3218.84,
+   "duration": 8.28,
+   "text": "that uh these are in fact um the same so"
+  },
+  {
+   "start": 3223.2,
+   "duration": 6.48,
+   "text": "xbo and xbo 2 if I just print"
+  },
+  {
+   "start": 3227.12,
+   "duration": 4.6,
+   "text": "them uh okay we're not going to be able"
+  },
+  {
+   "start": 3229.68,
+   "duration": 4.52,
+   "text": "to okay we're not going to be able to"
+  },
+  {
+   "start": 3231.72,
+   "duration": 4.96,
+   "text": "just stare it down but"
+  },
+  {
+   "start": 3234.2,
+   "duration": 4.04,
+   "text": "um well let me try Expo basically just"
+  },
+  {
+   "start": 3236.68,
+   "duration": 3.16,
+   "text": "at the zeroth element and Expo two at"
+  },
+  {
+   "start": 3238.24,
+   "duration": 4.2,
+   "text": "the zeroth element so just the first"
+  },
+  {
+   "start": 3239.84,
+   "duration": 4.76,
+   "text": "batch and we should see that this and"
+  },
+  {
+   "start": 3242.44,
+   "duration": 5.0,
+   "text": "that should be identical which they"
+  },
+  {
+   "start": 3244.6,
+   "duration": 4.92,
+   "text": "are right so what happened here the"
+  },
+  {
+   "start": 3247.44,
+   "duration": 5.32,
+   "text": "trick is we were able to use batched"
+  },
+  {
+   "start": 3249.52,
+   "duration": 6.2,
+   "text": "Matrix multiply to do this uh"
+  },
+  {
+   "start": 3252.76,
+   "duration": 4.96,
+   "text": "aggregation really and it's a weighted"
+  },
+  {
+   "start": 3255.72,
+   "duration": 5.76,
+   "text": "aggregation and the weights are"
+  },
+  {
+   "start": 3257.72,
+   "duration": 6.72,
+   "text": "specified in this um T BYT array and"
+  },
+  {
+   "start": 3261.48,
+   "duration": 4.96,
+   "text": "we're basically doing weighted sums and"
+  },
+  {
+   "start": 3264.44,
+   "duration": 4.4,
+   "text": "uh these weighted sums are are U"
+  },
+  {
+   "start": 3266.44,
+   "duration": 4.72,
+   "text": "according to uh the weights inside here"
+  },
+  {
+   "start": 3268.84,
+   "duration": 4.88,
+   "text": "they take on sort of this triangular"
+  },
+  {
+   "start": 3271.16,
+   "duration": 5.08,
+   "text": "form and so that means that a token at"
+  },
+  {
+   "start": 3273.72,
+   "duration": 5.88,
+   "text": "the teth dimension will only get uh sort"
+  },
+  {
+   "start": 3276.24,
+   "duration": 5.24,
+   "text": "of um information from the um tokens"
+  },
+  {
+   "start": 3279.6,
+   "duration": 3.96,
+   "text": "perceiving it so that's exactly what we"
+  },
+  {
+   "start": 3281.48,
+   "duration": 4.68,
+   "text": "want and finally I would like to rewrite"
+  },
+  {
+   "start": 3283.56,
+   "duration": 5.08,
+   "text": "it in one more way and we're going to"
+  },
+  {
+   "start": 3286.16,
+   "duration": 4.76,
+   "text": "see why that's useful so this is the"
+  },
+  {
+   "start": 3288.64,
+   "duration": 4.6,
+   "text": "third version and it's also identical to"
+  },
+  {
+   "start": 3290.92,
+   "duration": 3.8,
+   "text": "the first and second but let me talk"
+  },
+  {
+   "start": 3293.24,
+   "duration": 7.12,
+   "text": "through it it uses"
+  },
+  {
+   "start": 3294.72,
+   "duration": 7.04,
+   "text": "softmax so Trill here is this Matrix"
+  },
+  {
+   "start": 3300.36,
+   "duration": 5.04,
+   "text": "lower triangular"
+  },
+  {
+   "start": 3301.76,
+   "duration": 6.16,
+   "text": "ones way begins as all"
+  },
+  {
+   "start": 3305.4,
+   "duration": 6.28,
+   "text": "zero okay so if I just print way in the"
+  },
+  {
+   "start": 3307.92,
+   "duration": 7.28,
+   "text": "beginning it's all zero then I"
+  },
+  {
+   "start": 3311.68,
+   "duration": 6.68,
+   "text": "used masked fill so what this is doing"
+  },
+  {
+   "start": 3315.2,
+   "duration": 5.52,
+   "text": "is we. masked fill it's all zeros and"
+  },
+  {
+   "start": 3318.36,
+   "duration": 5.44,
+   "text": "I'm saying for all the elements where"
+  },
+  {
+   "start": 3320.72,
+   "duration": 5.64,
+   "text": "Trill is equal equal Z make them be"
+  },
+  {
+   "start": 3323.8,
+   "duration": 4.68,
+   "text": "negative Infinity so all the elements"
+  },
+  {
+   "start": 3326.36,
+   "duration": 5.96,
+   "text": "where Trill is zero will become negative"
+  },
+  {
+   "start": 3328.48,
+   "duration": 7.8,
+   "text": "Infinity now so this is what we get and"
+  },
+  {
+   "start": 3332.32,
+   "duration": 6.6,
+   "text": "then the final line here is"
+  },
+  {
+   "start": 3336.28,
+   "duration": 4.64,
+   "text": "softmax so if I take a softmax along"
+  },
+  {
+   "start": 3338.92,
+   "duration": 5.48,
+   "text": "every single so dim is negative one so"
+  },
+  {
+   "start": 3340.92,
+   "duration": 5.72,
+   "text": "along every single row if I do softmax"
+  },
+  {
+   "start": 3344.4,
+   "duration": 7.56,
+   "text": "what is that going to"
+  },
+  {
+   "start": 3346.64,
+   "duration": 8.28,
+   "text": "do well softmax is um is also like a"
+  },
+  {
+   "start": 3351.96,
+   "duration": 6.08,
+   "text": "normalization operation right and so"
+  },
+  {
+   "start": 3354.92,
+   "duration": 5.36,
+   "text": "spoiler alert you get the exact same"
+  },
+  {
+   "start": 3358.04,
+   "duration": 4.76,
+   "text": "Matrix let me bring back to"
+  },
+  {
+   "start": 3360.28,
+   "duration": 4.24,
+   "text": "softmax and recall that in softmax we're"
+  },
+  {
+   "start": 3362.8,
+   "duration": 4.0,
+   "text": "going to exponentiate every single one"
+  },
+  {
+   "start": 3364.52,
+   "duration": 5.48,
+   "text": "of these and then we're going to divide"
+  },
+  {
+   "start": 3366.8,
+   "duration": 4.52,
+   "text": "by the sum and so if we exponentiate"
+  },
+  {
+   "start": 3370.0,
+   "duration": 4.0,
+   "text": "every single element here we're going to"
+  },
+  {
+   "start": 3371.32,
+   "duration": 5.8,
+   "text": "get a one and here we're going to get uh"
+  },
+  {
+   "start": 3374.0,
+   "duration": 5.36,
+   "text": "basically zero 0 z0 Z everywhere else"
+  },
+  {
+   "start": 3377.12,
+   "duration": 4.72,
+   "text": "and then when we normalize we just get"
+  },
+  {
+   "start": 3379.36,
+   "duration": 5.28,
+   "text": "one here we're going to get one one and"
+  },
+  {
+   "start": 3381.84,
+   "duration": 5.52,
+   "text": "then zeros and then softmax will again"
+  },
+  {
+   "start": 3384.64,
+   "duration": 6.12,
+   "text": "divide and this will give us 5.5 and so"
+  },
+  {
+   "start": 3387.36,
+   "duration": 6.32,
+   "text": "on and so this is also the uh the same"
+  },
+  {
+   "start": 3390.76,
+   "duration": 4.0,
+   "text": "way to produce uh this mask now the"
+  },
+  {
+   "start": 3393.68,
+   "duration": 2.52,
+   "text": "reason that this is a bit more"
+  },
+  {
+   "start": 3394.76,
+   "duration": 3.16,
+   "text": "interesting and the reason we're going"
+  },
+  {
+   "start": 3396.2,
+   "duration": 5.6,
+   "text": "to end up using it in self"
+  },
+  {
+   "start": 3397.92,
+   "duration": 6.76,
+   "text": "attention is that these weights here"
+  },
+  {
+   "start": 3401.8,
+   "duration": 4.84,
+   "text": "begin uh with zero and you can think of"
+  },
+  {
+   "start": 3404.68,
+   "duration": 4.52,
+   "text": "this as like an interaction strength or"
+  },
+  {
+   "start": 3406.64,
+   "duration": 5.64,
+   "text": "like an affinity so basically it's"
+  },
+  {
+   "start": 3409.2,
+   "duration": 5.68,
+   "text": "telling us how much of each uh token"
+  },
+  {
+   "start": 3412.28,
+   "duration": 4.92,
+   "text": "from the past do we want to Aggregate"
+  },
+  {
+   "start": 3414.88,
+   "duration": 5.08,
+   "text": "and average up"
+  },
+  {
+   "start": 3417.2,
+   "duration": 5.36,
+   "text": "and then this line is saying tokens from"
+  },
+  {
+   "start": 3419.96,
+   "duration": 4.48,
+   "text": "the past cannot communicate by setting"
+  },
+  {
+   "start": 3422.56,
+   "duration": 3.76,
+   "text": "them to negative Infinity we're saying"
+  },
+  {
+   "start": 3424.44,
+   "duration": 2.96,
+   "text": "that we will not aggregate anything from"
+  },
+  {
+   "start": 3426.32,
+   "duration": 3.4,
+   "text": "those"
+  },
+  {
+   "start": 3427.4,
+   "duration": 3.96,
+   "text": "tokens and so basically this then goes"
+  },
+  {
+   "start": 3429.72,
+   "duration": 2.96,
+   "text": "through softmax and through the weighted"
+  },
+  {
+   "start": 3431.36,
+   "duration": 2.72,
+   "text": "and this is the aggregation through"
+  },
+  {
+   "start": 3432.68,
+   "duration": 3.48,
+   "text": "matrix"
+  },
+  {
+   "start": 3434.08,
+   "duration": 5.08,
+   "text": "multiplication and so what this is now"
+  },
+  {
+   "start": 3436.16,
+   "duration": 5.4,
+   "text": "is you can think of these as um these"
+  },
+  {
+   "start": 3439.16,
+   "duration": 6.0,
+   "text": "zeros are currently just set by us to be"
+  },
+  {
+   "start": 3441.56,
+   "duration": 5.88,
+   "text": "zero but a quick preview is that these"
+  },
+  {
+   "start": 3445.16,
+   "duration": 4.04,
+   "text": "affinities between the tokens are not"
+  },
+  {
+   "start": 3447.44,
+   "duration": 3.96,
+   "text": "going to be just constant at zero"
+  },
+  {
+   "start": 3449.2,
+   "duration": 3.6,
+   "text": "they're going to be data dependent these"
+  },
+  {
+   "start": 3451.4,
+   "duration": 3.48,
+   "text": "tokens are going to start looking at"
+  },
+  {
+   "start": 3452.8,
+   "duration": 4.84,
+   "text": "each other and some tokens will find"
+  },
+  {
+   "start": 3454.88,
+   "duration": 4.72,
+   "text": "other tokens more or less interesting"
+  },
+  {
+   "start": 3457.64,
+   "duration": 3.36,
+   "text": "and depending on what their values are"
+  },
+  {
+   "start": 3459.6,
+   "duration": 3.32,
+   "text": "they're going to find each other"
+  },
+  {
+   "start": 3461.0,
+   "duration": 4.28,
+   "text": "interesting to different amounts and I'm"
+  },
+  {
+   "start": 3462.92,
+   "duration": 4.16,
+   "text": "going to call those affinities I think"
+  },
+  {
+   "start": 3465.28,
+   "duration": 3.84,
+   "text": "and then here we are saying the future"
+  },
+  {
+   "start": 3467.08,
+   "duration": 4.48,
+   "text": "cannot communicate with the past we're"
+  },
+  {
+   "start": 3469.12,
+   "duration": 4.52,
+   "text": "we're going to clamp them and then when"
+  },
+  {
+   "start": 3471.56,
+   "duration": 4.6,
+   "text": "we normalize and sum we're going to"
+  },
+  {
+   "start": 3473.64,
+   "duration": 3.8,
+   "text": "aggregate uh sort of their values"
+  },
+  {
+   "start": 3476.16,
+   "duration": 3.32,
+   "text": "depending on how interesting they find"
+  },
+  {
+   "start": 3477.44,
+   "duration": 5.68,
+   "text": "each other and so that's the preview for"
+  },
+  {
+   "start": 3479.48,
+   "duration": 5.6,
+   "text": "self attention and basically long story"
+  },
+  {
+   "start": 3483.12,
+   "duration": 4.6,
+   "text": "short from this entire section is that"
+  },
+  {
+   "start": 3485.08,
+   "duration": 3.56,
+   "text": "you can do weighted aggregations of your"
+  },
+  {
+   "start": 3487.72,
+   "duration": 4.28,
+   "text": "past"
+  },
+  {
+   "start": 3488.64,
+   "duration": 5.92,
+   "text": "Elements by having by using matrix"
+  },
+  {
+   "start": 3492.0,
+   "duration": 5.12,
+   "text": "multiplication of a lower triangular"
+  },
+  {
+   "start": 3494.56,
+   "duration": 4.2,
+   "text": "fashion and then the elements here in"
+  },
+  {
+   "start": 3497.12,
+   "duration": 4.52,
+   "text": "the lower triangular part are telling"
+  },
+  {
+   "start": 3498.76,
+   "duration": 5.24,
+   "text": "you how much of each element uh fuses"
+  },
+  {
+   "start": 3501.64,
+   "duration": 3.88,
+   "text": "into this position so we're going to use"
+  },
+  {
+   "start": 3504.0,
+   "duration": 3.68,
+   "text": "this trick now to develop the self"
+  },
+  {
+   "start": 3505.52,
+   "duration": 4.92,
+   "text": "attention block block so first let's get"
+  },
+  {
+   "start": 3507.68,
+   "duration": 4.2,
+   "text": "some quick preliminaries out of the way"
+  },
+  {
+   "start": 3510.44,
+   "duration": 2.84,
+   "text": "first the thing I'm kind of bothered by"
+  },
+  {
+   "start": 3511.88,
+   "duration": 3.24,
+   "text": "is that you see how we're passing in"
+  },
+  {
+   "start": 3513.28,
+   "duration": 3.44,
+   "text": "vocap size into the Constructor there's"
+  },
+  {
+   "start": 3515.12,
+   "duration": 3.72,
+   "text": "no need to do that because vocap size is"
+  },
+  {
+   "start": 3516.72,
+   "duration": 3.84,
+   "text": "already defined uh up top as a global"
+  },
+  {
+   "start": 3518.84,
+   "duration": 2.76,
+   "text": "variable so there's no need to pass this"
+  },
+  {
+   "start": 3520.56,
+   "duration": 4.0,
+   "text": "stuff"
+  },
+  {
+   "start": 3521.6,
+   "duration": 4.92,
+   "text": "around next what I want to do is I don't"
+  },
+  {
+   "start": 3524.56,
+   "duration": 3.4,
+   "text": "want to actually create I want to create"
+  },
+  {
+   "start": 3526.52,
+   "duration": 3.16,
+   "text": "like a level of indirection here where"
+  },
+  {
+   "start": 3527.96,
+   "duration": 4.88,
+   "text": "we don't directly go to the embedding"
+  },
+  {
+   "start": 3529.68,
+   "duration": 4.76,
+   "text": "for the um logits but instead we go"
+  },
+  {
+   "start": 3532.84,
+   "duration": 4.36,
+   "text": "through this intermediate phase because"
+  },
+  {
+   "start": 3534.44,
+   "duration": 5.4,
+   "text": "we're going to start making that bigger"
+  },
+  {
+   "start": 3537.2,
+   "duration": 5.48,
+   "text": "so let me introduce a new variable n"
+  },
+  {
+   "start": 3539.84,
+   "duration": 4.68,
+   "text": "embed it shorted for number of embedding"
+  },
+  {
+   "start": 3542.68,
+   "duration": 6.8,
+   "text": "Dimensions so"
+  },
+  {
+   "start": 3544.52,
+   "duration": 6.56,
+   "text": "nbed here will be say 32 that was a"
+  },
+  {
+   "start": 3549.48,
+   "duration": 4.96,
+   "text": "suggestion from GitHub co-pilot by the"
+  },
+  {
+   "start": 3551.08,
+   "duration": 5.64,
+   "text": "way um it also suest 32 which is a good"
+  },
+  {
+   "start": 3554.44,
+   "duration": 4.48,
+   "text": "number so this is an embedding table and"
+  },
+  {
+   "start": 3556.72,
+   "duration": 4.52,
+   "text": "only 32 dimensional"
+  },
+  {
+   "start": 3558.92,
+   "duration": 4.64,
+   "text": "embeddings so then here this is not"
+  },
+  {
+   "start": 3561.24,
+   "duration": 3.56,
+   "text": "going to give us logits directly instead"
+  },
+  {
+   "start": 3563.56,
+   "duration": 3.64,
+   "text": "this is going to give us token"
+  },
+  {
+   "start": 3564.8,
+   "duration": 4.2,
+   "text": "embeddings that's I'm going to call it"
+  },
+  {
+   "start": 3567.2,
+   "duration": 3.56,
+   "text": "and then to go from the token Tings to"
+  },
+  {
+   "start": 3569.0,
+   "duration": 5.08,
+   "text": "the logits we're going to need a linear"
+  },
+  {
+   "start": 3570.76,
+   "duration": 5.72,
+   "text": "layer so self. LM head let's call it"
+  },
+  {
+   "start": 3574.08,
+   "duration": 5.8,
+   "text": "short for language modeling head is n"
+  },
+  {
+   "start": 3576.48,
+   "duration": 4.84,
+   "text": "and linear from n ined up to vocap size"
+  },
+  {
+   "start": 3579.88,
+   "duration": 3.68,
+   "text": "and then when we swing over here we're"
+  },
+  {
+   "start": 3581.32,
+   "duration": 4.92,
+   "text": "actually going to get the loits by"
+  },
+  {
+   "start": 3583.56,
+   "duration": 4.88,
+   "text": "exactly what the co-pilot says now we"
+  },
+  {
+   "start": 3586.24,
+   "duration": 6.24,
+   "text": "have to be careful here because this C"
+  },
+  {
+   "start": 3588.44,
+   "duration": 7.08,
+   "text": "and this C are not equal um this is nmed"
+  },
+  {
+   "start": 3592.48,
+   "duration": 5.48,
+   "text": "C and this is vocap size so let's just"
+  },
+  {
+   "start": 3595.52,
+   "duration": 5.64,
+   "text": "say that n ined is equal to"
+  },
+  {
+   "start": 3597.96,
+   "duration": 4.88,
+   "text": "C and then this just creates one spous"
+  },
+  {
+   "start": 3601.16,
+   "duration": 5.92,
+   "text": "layer of interaction through a linear"
+  },
+  {
+   "start": 3602.84,
+   "duration": 4.24,
+   "text": "layer but uh this should basically"
+  },
+  {
+   "start": 3611.36,
+   "duration": 5.64,
+   "text": "run so we see that this runs and uh this"
+  },
+  {
+   "start": 3615.16,
+   "duration": 3.88,
+   "text": "currently looks kind of spous but uh"
+  },
+  {
+   "start": 3617.0,
+   "duration": 5.08,
+   "text": "we're going to build on top of this now"
+  },
+  {
+   "start": 3619.04,
+   "duration": 4.64,
+   "text": "next up so far we've taken these indices"
+  },
+  {
+   "start": 3622.08,
+   "duration": 6.08,
+   "text": "and we've encoded them based on the"
+  },
+  {
+   "start": 3623.68,
+   "duration": 6.4,
+   "text": "identity of the uh tokens in inside idx"
+  },
+  {
+   "start": 3628.16,
+   "duration": 3.44,
+   "text": "the next thing that people very often do"
+  },
+  {
+   "start": 3630.08,
+   "duration": 3.72,
+   "text": "is that we're not just encoding the"
+  },
+  {
+   "start": 3631.6,
+   "duration": 4.32,
+   "text": "identity of these tokens but also their"
+  },
+  {
+   "start": 3633.8,
+   "duration": 4.6,
+   "text": "position so we're going to have a second"
+  },
+  {
+   "start": 3635.92,
+   "duration": 5.56,
+   "text": "position uh embedding table here so"
+  },
+  {
+   "start": 3638.4,
+   "duration": 5.72,
+   "text": "self. position embedding table is an an"
+  },
+  {
+   "start": 3641.48,
+   "duration": 4.76,
+   "text": "embedding of block size by an embed and"
+  },
+  {
+   "start": 3644.12,
+   "duration": 3.52,
+   "text": "so each position from zero to block size"
+  },
+  {
+   "start": 3646.24,
+   "duration": 4.6,
+   "text": "minus one will also get its own"
+  },
+  {
+   "start": 3647.64,
+   "duration": 6.72,
+   "text": "embedding vector and then here first let"
+  },
+  {
+   "start": 3650.84,
+   "duration": 5.68,
+   "text": "me decode B BYT from idx do"
+  },
+  {
+   "start": 3654.36,
+   "duration": 4.0,
+   "text": "shape and then here we're also going to"
+  },
+  {
+   "start": 3656.52,
+   "duration": 3.52,
+   "text": "have a pause embedding which is the"
+  },
+  {
+   "start": 3658.36,
+   "duration": 4.64,
+   "text": "positional embedding and these are this"
+  },
+  {
+   "start": 3660.04,
+   "duration": 6.2,
+   "text": "is to arrange so this will be basically"
+  },
+  {
+   "start": 3663.0,
+   "duration": 5.08,
+   "text": "just integers from Z to T minus one and"
+  },
+  {
+   "start": 3666.24,
+   "duration": 3.64,
+   "text": "all of those integers from 0 to T minus"
+  },
+  {
+   "start": 3668.08,
+   "duration": 3.2,
+   "text": "one get embedded through the table to"
+  },
+  {
+   "start": 3669.88,
+   "duration": 4.88,
+   "text": "create a t by"
+  },
+  {
+   "start": 3671.28,
+   "duration": 7.44,
+   "text": "C and then here this gets renamed to"
+  },
+  {
+   "start": 3674.76,
+   "duration": 6.12,
+   "text": "just say x and x will be the addition of"
+  },
+  {
+   "start": 3678.72,
+   "duration": 4.2,
+   "text": "the token embeddings with the positional"
+  },
+  {
+   "start": 3680.88,
+   "duration": 4.56,
+   "text": "embeddings and here the broadcasting"
+  },
+  {
+   "start": 3682.92,
+   "duration": 3.52,
+   "text": "note will work out so B by T by C plus T"
+  },
+  {
+   "start": 3685.44,
+   "duration": 3.2,
+   "text": "by C"
+  },
+  {
+   "start": 3686.44,
+   "duration": 3.8,
+   "text": "this gets right aligned a new dimension"
+  },
+  {
+   "start": 3688.64,
+   "duration": 3.12,
+   "text": "of one gets added and it gets"
+  },
+  {
+   "start": 3690.24,
+   "duration": 4.64,
+   "text": "broadcasted across"
+  },
+  {
+   "start": 3691.76,
+   "duration": 5.8,
+   "text": "batch so at this point x holds not just"
+  },
+  {
+   "start": 3694.88,
+   "duration": 5.08,
+   "text": "the token identities but the positions"
+  },
+  {
+   "start": 3697.56,
+   "duration": 4.12,
+   "text": "at which these tokens occur and this is"
+  },
+  {
+   "start": 3699.96,
+   "duration": 3.4,
+   "text": "currently not that useful because of"
+  },
+  {
+   "start": 3701.68,
+   "duration": 2.72,
+   "text": "course we just have a simple byr model"
+  },
+  {
+   "start": 3703.36,
+   "duration": 2.92,
+   "text": "so it doesn't matter if you're in the"
+  },
+  {
+   "start": 3704.4,
+   "duration": 3.96,
+   "text": "fifth position the second position or"
+  },
+  {
+   "start": 3706.28,
+   "duration": 4.16,
+   "text": "wherever it's all translation invariant"
+  },
+  {
+   "start": 3708.36,
+   "duration": 4.52,
+   "text": "at this stage uh so this information"
+  },
+  {
+   "start": 3710.44,
+   "duration": 3.96,
+   "text": "currently wouldn't help uh but as we"
+  },
+  {
+   "start": 3712.88,
+   "duration": 4.96,
+   "text": "work on the self attention block we'll"
+  },
+  {
+   "start": 3714.4,
+   "duration": 3.44,
+   "text": "see that this starts to matter"
+  },
+  {
+   "start": 3719.88,
+   "duration": 3.36,
+   "text": "okay so now we get the Crux of self"
+  }
+ ]
+}

@@ -1,0 +1,10 @@
+{
+ "tier": "easy",
+ "source": "vectors_first90s.mp3",
+ "note": "Same talk as e2 but the first 90 s as MP3, transcribed locally with faster-whisper. Output should resemble e2's first concept.",
+ "config": {
+  "max_plans": 1,
+  "audience": "undergrad",
+  "min_salience": 2
+ }
+}

@@ -1,0 +1,12 @@
+{
+ "tier": "challenging",
+ "source": "input.md",
+ "companion": [
+  "companion_equations.md"
+ ],
+ "note": "Second half of 'Swizzling explained properly': what base protects (ldmatrix rows), the Swizzle 32B/64B/128B modes and their conflict degrees, the A100 benchmark, why input swizzling matters and output swizzling does not (3x loads vs stores, 64x GMEM reloads, 128-byte transaction split).",
+ "config": {
+  "max_plans": 9,
+  "audience": "grad"
+ }
+}

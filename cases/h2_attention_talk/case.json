@@ -1,0 +1,9 @@
+{
+ "tier": "hard",
+ "source": "transcript.json",
+ "note": "Full 26-minute 3Blue1Brown 'Attention in transformers' transcript. Tests bucketing, triage and dedup on long input.",
+ "config": {
+  "max_plans": 4,
+  "audience": "undergrad"
+ }
+}

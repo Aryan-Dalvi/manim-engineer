@@ -1,0 +1,9 @@
+{
+ "tier": "hard",
+ "source": "input.md",
+ "note": "Prerequisites for the swizzling article (scallion3008.github.io/swizzling): GPU processor and memory hierarchy, cache lines and hits/misses, shared-memory banks and conflicts, tensor-core fragments, XOR facts. Researched from NVIDIA docs; written for newcomers.",
+ "config": {
+  "max_plans": 7,
+  "audience": "undergrad"
+ }
+}
