@@ -34,6 +34,7 @@ Rendering and publishing produce files users receive. For output-context changes
 - Section GIFs decode with ffprobe and have the expected frame count.
 - Gallery `index.html` references only files that exist.
 - Run `deck.html` links only clips that exist plus the copied `revealjs/` assets, and every request it makes stays on the local origin.
+- Run `deck.html` holds slides only for concepts whose approval pin in `review/approvals.json` still holds.
 - In a browser the deck reports `Reveal.isReady()`, each beat's clip plays when its slide is shown, and narration comes back from `Reveal.getSlideNotes()`. Serve the deck over local HTTP for this; the in-app browser cannot run scripts in a `file://` page.
 - Browser screenshots can omit `<video>` layers. Judge playback from element state, or draw the current frame onto a canvas over the video, never from a blank screenshot alone.
 

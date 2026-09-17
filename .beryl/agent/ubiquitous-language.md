@@ -24,8 +24,9 @@
 | Repair Budget | `RepairPolicy` | Max attempts per finding class and abort rule on repeated category | Deterministic: 3; visual: 2; total calls: 5 | `TryAgainLoop` |
 | Artifact Bundle | `ArtifactBundle` | Published outputs for one plan: master MP4, sections, GIFs, stills, manifest | `manifest.json` is the contract | `Export` |
 | Run | `outputs/<run>/` | One pipeline execution over one input, with gallery | Self-contained directory | `Job` |
-| Presenter Deck | `outputs/<run>/deck.html` | Reveal.js deck for a run: one slide per beat clip, narration as speaker notes | Accepted and needs-review concepts only; presents offline | `Slideshow` |
+| Presenter Deck | `outputs/<run>/deck.html` | Reveal.js deck for a run: one slide per beat clip, narration as speaker notes | Approved concepts whose pin holds; presents offline | `Slideshow` |
 | Review Note | `ReviewNote` | Human feedback attached to a concept in a run | Consumed by `revise` | `Comment` |
+| Approval Pin | `ApprovalPin` | A reviewer's sign-off on one concept: hashes of its plan JSON and accepted scene code in `review/approvals.json` | Holds only while both are unchanged; a broken pin is revoked with a stated reason | `Lock`, `Freeze` |
 | Backend | `LLMBackend` | Adapter that completes text or structured output and reads images | Claude CLI, Anthropic SDK, Fake | `Client` |
 
 ## Beryl Terms

@@ -42,6 +42,8 @@ manim-engineer live <transcript> --out outputs/<name> --chunk 4        # replay 
 manim-engineer plan <input> --out outputs/<name>                        # plans only
 manim-engineer render-plan outputs/<name>/plans/<concept>.json --out outputs/<name>
 manim-engineer revise outputs/<name> <concept> --note "make the arrows blue"
+manim-engineer approve outputs/<name> <concept>                         # pin it: re-runs keep it, the deck shows it
+manim-engineer unapprove outputs/<name> <concept>
 manim-engineer run-cases [--tier easy] [--only e1_softmax_markdown]     # the corpus in cases/
 manim-engineer gallery outputs                                          # rebuild outputs/index.html
 manim-engineer doctor
