@@ -10,6 +10,7 @@ from manim_engineer.core import (
     Beat,
     Budgets,
     Concept,
+    Equation,
     Finding,
     Modality,
     Severity,
@@ -94,6 +95,11 @@ def test_markdown_mirror_mentions_beats_and_claim():
     assert "# Softmax temperature" in md
     assert "`b2_sweep`" in md
     assert "Lower temperature sharpens softmax." in md
+
+
+def test_equation_defaults_to_unsourced():
+    e = Equation(label="eq1", latex="a=b")
+    assert e.verbatim is False and e.para_id == "" and e.env == ""
 
 
 def test_finding_one_line_includes_fix():
