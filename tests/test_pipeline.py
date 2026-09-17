@@ -12,13 +12,16 @@ from manim_engineer.pipeline import (
     RepairPolicy,
     RunConfig,
     RunDir,
+    approve_run,
     revise_run,
     run_live,
     run_pipeline,
+    unapprove_run,
 )
+from manim_engineer.pipeline.approval import ApprovalError, load_approvals, pin_problem
 from manim_engineer.pipeline.gallery import write_run_gallery
 from manim_engineer.pipeline.realize import realize_plan
-from manim_engineer.planning import load_plan
+from manim_engineer.planning import load_plan, save_plan
 
 MD = """# Softmax temperature
 
@@ -142,6 +145,83 @@ def _backend(mode: str = "good") -> FakeBackend:
         raise AssertionError(req.tag)
 
     return FakeBackend(default=default)
+
+
+def _softmax_plan():
+    from manim_engineer.ingest import document_from_markdown
+    from manim_engineer.planning import Planner, bucket_document
+
+    be = _backend()
+    data = be.complete(LLMRequest(prompt="", tag="plan_x")).structured
+    doc = document_from_markdown(MD, source="m.md", title="t")
+    return Planner(be).build_plan(data, bucket_document(doc)[0], doc, None)
+
+
+def _bundle(cid: str, bdir: Path) -> ArtifactBundle:
+    (bdir / "sections").mkdir(parents=True, exist_ok=True)
+    (bdir / "sections" / "01_b1_intro.mp4").write_bytes(b"mp4")
+    return ArtifactBundle(
+        plan_id=f"plan_{cid}",
+        concept_id=cid,
+        scene_class="Scene",
+        manim_version="0.19.2",
+        quality="480p15",
+        width=854,
+        height=480,
+        fps=15.0,
+        duration_s=2.0,
+        master_mp4="master.mp4",
+        sections=[
+            SectionArtifact(
+                index=1,
+                name="b1_intro",
+                duration_s=2.0,
+                mp4="sections/01_b1_intro.mp4",
+                narration=f"{cid} narration",
+            )
+        ],
+    )
+
+
+def _accepted_run(run: Path, cids: tuple[str, ...] = ("softmax_temperature",)) -> dict:
+    """A run directory whose concepts were accepted by an earlier run, built without rendering."""
+    rd = RunDir(run).ensure()
+    concepts = []
+    for cid in cids:
+        plan = _softmax_plan()
+        plan.concept.concept_id = cid
+        plan.plan_id = f"plan_{cid}"
+        save_plan(plan, rd.plans)
+        code = run / "candidates" / cid / "attempt_01.py"
+        code.parent.mkdir(parents=True, exist_ok=True)
+        code.write_text(GOOD_SCENE.format(cls=plan.scene_class, b1="b1_formula", b2="b2_sweep"))
+        bdir = run / "animations" / cid
+        concepts.append(
+            {
+                "concept_id": cid,
+                "plan_id": plan.plan_id,
+                "status": "accepted",
+                "accepted_code": str(code),
+                "bundle_dir": str(bdir),
+                "bundle": _bundle(cid, bdir).model_dump(),
+                "plan": plan.model_dump(by_alias=True),
+            }
+        )
+    summary = {
+        "title": "Softmax talk",
+        "source": "softmax.md",
+        "plans": list(cids),
+        "concepts": concepts,
+    }
+    rd.save_summary(summary)
+    return RunDir(run).load_summary()
+
+
+def _edit_first_narration(run: Path, cid: str, text: str) -> None:
+    plan_path = run / "plans" / f"{cid}.json"
+    data = json.loads(plan_path.read_text())
+    data["beats"][0]["narration"] = text
+    plan_path.write_text(json.dumps(data, indent=1))
 
 
 @pytest.mark.integration
@@ -305,3 +385,91 @@ def test_cli_help_lists_commands():
     assert res.exit_code == 0
     for cmd in ("run", "live", "plan", "render-plan", "revise", "gallery", "run-cases", "doctor"):
         assert cmd in res.output
+
+
+def test_approve_pins_the_plan_and_accepted_code(tmp_path: Path):
+    run = tmp_path / "run"
+    _accepted_run(run)
+    pin = approve_run(
+        run, "softmax_temperature", author="aryan", note="formula checked", log=lambda *a: None
+    )
+    stored = json.loads((run / "review" / "approvals.json").read_text())
+    record = stored["approved"]["softmax_temperature"]
+    assert record["pin"] == pin.pin and len(pin.pin) == 64
+    assert record["accepted_code"] == "candidates/softmax_temperature/attempt_01.py"
+    assert record["author"] == "aryan" and record["note"] == "formula checked"
+    assert record["approved_at"].endswith("Z")
+    entry = RunDir(run).load_summary()["concepts"][0]
+    assert pin_problem(run, pin, entry) is None
+
+
+def test_pin_breaks_with_a_reason_when_the_plan_changes(tmp_path: Path):
+    run = tmp_path / "run"
+    _accepted_run(run)
+    pin = approve_run(run, "softmax_temperature", log=lambda *a: None)
+    entry = RunDir(run).load_summary()["concepts"][0]
+    plan_path = run / "plans" / "softmax_temperature.json"
+    # reformatting is not an edit
+    plan_path.write_text(json.dumps(json.loads(plan_path.read_text()), indent=4, sort_keys=True))
+    assert pin_problem(run, pin, entry) is None
+    _edit_first_narration(run, "softmax_temperature", "Start from the logits.")
+    assert pin_problem(run, pin, entry) == "plan changed since approval"
+
+
+def test_pin_breaks_with_a_reason_when_the_accepted_code_changes(tmp_path: Path):
+    run = tmp_path / "run"
+    _accepted_run(run)
+    pin = approve_run(run, "softmax_temperature", log=lambda *a: None)
+    entry = RunDir(run).load_summary()["concepts"][0]
+    code = run / "candidates" / "softmax_temperature" / "attempt_01.py"
+    replaced = dict(entry, accepted_code=str(code.with_name("attempt_02.py")))
+    assert pin_problem(run, pin, replaced) == (
+        "accepted animation replaced: candidates/softmax_temperature/attempt_01.py"
+        " → candidates/softmax_temperature/attempt_02.py"
+    )
+    code.write_text(code.read_text() + "\n# touched\n")
+    assert pin_problem(run, pin, entry) == "accepted code changed since approval"
+
+
+def test_approve_refuses_a_concept_without_an_accepted_animation(tmp_path: Path):
+    run = tmp_path / "run"
+    summary = _accepted_run(run)
+    summary["concepts"][0].update(status="rejected", accepted_code=None, bundle=None)
+    RunDir(run).save_summary(summary)
+    with pytest.raises(ApprovalError, match="no accepted animation to approve"):
+        approve_run(run, "softmax_temperature", log=lambda *a: None)
+    assert not (run / "review" / "approvals.json").exists()
+
+
+def test_approve_refuses_when_the_plan_changed_after_rendering(tmp_path: Path):
+    run = tmp_path / "run"
+    _accepted_run(run)
+    _edit_first_narration(run, "softmax_temperature", "Start from the logits.")
+    with pytest.raises(ApprovalError, match="changed after this animation was rendered"):
+        approve_run(run, "softmax_temperature", log=lambda *a: None)
+
+
+def test_unapprove_records_who_revoked_the_pin(tmp_path: Path):
+    run = tmp_path / "run"
+    _accepted_run(run)
+    approve_run(run, "softmax_temperature", log=lambda *a: None)
+    unapprove_run(run, "softmax_temperature", author="aryan", log=lambda *a: None)
+    approvals = load_approvals(run)
+    assert approvals.approved == {}
+    assert approvals.revoked[0].revoked_reason == "unapproved by aryan"
+    with pytest.raises(ApprovalError, match="is not approved"):
+        unapprove_run(run, "softmax_temperature", log=lambda *a: None)
+
+
+def test_cli_approve_and_unapprove(tmp_path: Path):
+    run = tmp_path / "run"
+    _accepted_run(run)
+    runner = CliRunner()
+    res = runner.invoke(main, ["approve", str(run), "softmax_temperature", "--author", "aryan"])
+    assert res.exit_code == 0, res.output
+    assert "softmax_temperature: approved (pin " in res.output
+    res = runner.invoke(main, ["approve", str(run), "nope"])
+    assert res.exit_code != 0 and "nope is not a concept" in res.output
+    res = runner.invoke(main, ["unapprove", str(run), "softmax_temperature"])
+    assert res.exit_code == 0, res.output
+    assert "softmax_temperature: unapproved" in res.output

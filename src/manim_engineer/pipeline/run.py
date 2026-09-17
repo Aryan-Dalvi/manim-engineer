@@ -12,6 +12,14 @@ from typing import Any
 from manim_engineer.core import AnimationPlan, Document, ReviewNote
 from manim_engineer.ingest import ingest, load_document, save_document
 from manim_engineer.llm import LLMBackend, select_backend
+from manim_engineer.pipeline.approval import (
+    ApprovalError,
+    ApprovalPin,
+    approve_concept,
+    load_approvals,
+    revoke,
+    save_approvals,
+)
 from manim_engineer.pipeline.config import RunConfig
 from manim_engineer.pipeline.gallery import write_run_gallery
 from manim_engineer.pipeline.realize import ConceptResult, realize_plan, revise_concept
@@ -268,6 +276,29 @@ def revise_run(
     rd.concept_json(concept_id).write_text(r.to_json())
     write_run_gallery(rd.path, summary)
     return r
+
+
+def approve_run(
+    out_dir: str | Path, concept_id: str, author: str = "", note: str = "", log=print
+) -> ApprovalPin:
+    rd = RunDir(out_dir)
+    summary = rd.load_summary()
+    pin = approve_concept(rd.path, summary, concept_id, author=author, note=note)
+    write_run_gallery(rd.path, summary)
+    log(f"[approval] {concept_id}: approved (pin {pin.pin[:12]})")
+    return pin
+
+
+def unapprove_run(out_dir: str | Path, concept_id: str, author: str = "", log=print) -> ApprovalPin:
+    rd = RunDir(out_dir)
+    approvals = load_approvals(rd.path)
+    pin = revoke(approvals, concept_id, f"unapproved by {author}" if author else "unapproved")
+    if pin is None:
+        raise ApprovalError(f"{concept_id} is not approved in {rd.path}")
+    save_approvals(rd.path, approvals)
+    write_run_gallery(rd.path, rd.load_summary())
+    log(f"[approval] {concept_id}: {pin.revoked_reason}")
+    return pin
 
 
 def run_live(

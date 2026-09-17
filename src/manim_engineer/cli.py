@@ -10,11 +10,14 @@ from pathlib import Path
 import click
 
 from manim_engineer.pipeline import (
+    ApprovalError,
     RunConfig,
+    approve_run,
     render_plan_file,
     revise_run,
     run_live,
     run_pipeline,
+    unapprove_run,
     write_index,
 )
 
@@ -154,6 +157,33 @@ def revise(run_dir, concept_id, note, author, constraints, **kw):
     cfg = _cfg(constraints=list(constraints), **kw)
     r = revise_run(run_dir, concept_id, note, cfg, author=author)
     click.echo(f"{r.concept_id}: {r.status} {r.message}")
+
+
+@main.command()
+@click.argument("run_dir")
+@click.argument("concept_id")
+@click.option("--author", default="")
+@click.option("--note", default="", help="why the animation is approved")
+def approve(run_dir, concept_id, author, note):
+    """Pin a concept's plan and accepted animation so later runs keep it."""
+    try:
+        pin = approve_run(run_dir, concept_id, author=author, note=note, log=lambda *a: None)
+    except ApprovalError as e:
+        raise click.ClickException(str(e)) from e
+    click.echo(f"{concept_id}: approved (pin {pin.pin[:12]})")
+
+
+@main.command()
+@click.argument("run_dir")
+@click.argument("concept_id")
+@click.option("--author", default="")
+def unapprove(run_dir, concept_id, author):
+    """Remove a concept's approval pin."""
+    try:
+        pin = unapprove_run(run_dir, concept_id, author=author, log=lambda *a: None)
+    except ApprovalError as e:
+        raise click.ClickException(str(e)) from e
+    click.echo(f"{concept_id}: {pin.revoked_reason}")
 
 
 @main.command()
