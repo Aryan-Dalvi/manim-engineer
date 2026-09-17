@@ -17,6 +17,7 @@ from manim_engineer.output.derivatives import (
     to_gif,
 )
 from manim_engineer.output.render import QUALITY_FOLDER, RenderError, RenderResult, render
+from manim_engineer.output.revealjs import REVEALJS_VERSION, DeckEntry, build_revealjs
 
 
 def publish(
@@ -119,9 +120,12 @@ def load_bundle(out_dir: str | Path) -> ArtifactBundle:
 
 
 __all__ = [
+    "REVEALJS_VERSION",
+    "DeckEntry",
     "RenderError",
     "RenderResult",
     "build_pptx",
+    "build_revealjs",
     "ffmpeg_available",
     "frame_count",
     "load_bundle",
