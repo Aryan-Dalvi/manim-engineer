@@ -9,6 +9,7 @@ from manim_engineer.cli import main
 from manim_engineer.core import ArtifactBundle, SectionArtifact
 from manim_engineer.llm import FakeBackend, LLMRequest
 from manim_engineer.pipeline import (
+    ConceptResult,
     RepairPolicy,
     RunConfig,
     RunDir,
@@ -473,3 +474,154 @@ def test_cli_approve_and_unapprove(tmp_path: Path):
     res = runner.invoke(main, ["unapprove", str(run), "softmax_temperature"])
     assert res.exit_code == 0, res.output
     assert "softmax_temperature: unapproved" in res.output
+
+
+def _rerun(tmp_path: Path, monkeypatch, run: Path):
+    """Run the softmax source again into `run`, with planning faked and realization recorded."""
+    import manim_engineer.pipeline.run as runmod
+
+    src = tmp_path / "softmax.md"
+    src.write_text(MD)
+    realized: list[tuple[str, str]] = []
+
+    def fake_realize(plan, run_dir, backend, cfg, log=print):
+        realized.append((plan.concept.concept_id, plan.beats[0].narration))
+        return ConceptResult(
+            concept_id=plan.concept.concept_id,
+            plan_id=plan.plan_id,
+            status="rejected",
+            message="not rendered in this test",
+        )
+
+    monkeypatch.setattr(runmod, "select_backend", lambda *a, **k: _backend())
+    monkeypatch.setattr(runmod, "realize_plan", fake_realize)
+    logs: list[str] = []
+    cfg = RunConfig(backend="fake", workers=1, critique=False)
+    summary = run_pipeline(str(src), run, cfg, log=logs.append)
+    return summary, realized, logs
+
+
+def test_rerun_skips_an_approved_concept_and_says_so(tmp_path: Path, monkeypatch):
+    run = tmp_path / "run"
+    _accepted_run(run)
+    pin = approve_run(run, "softmax_temperature", log=lambda *a: None)
+    plan_before = (run / "plans" / "softmax_temperature.json").read_text()
+
+    summary, realized, logs = _rerun(tmp_path, monkeypatch, run)
+
+    assert realized == []
+    assert (
+        f"[approval] softmax_temperature: approved {pin.approved_at} (pin {pin.pin[:12]}); skipped"
+        in logs
+    )
+    assert summary["plans"] == ["softmax_temperature"]
+    c = summary["concepts"][0]
+    assert c["status"] == "accepted" and c["accepted_code"].endswith("attempt_01.py")
+    assert (run / "plans" / "softmax_temperature.json").read_text() == plan_before
+    assert pin_problem(run, load_approvals(run).approved["softmax_temperature"], c) is None
+
+
+def test_rerun_revokes_an_edited_plan_and_renders_the_edit(tmp_path: Path, monkeypatch):
+    run = tmp_path / "run"
+    _accepted_run(run)
+    approve_run(run, "softmax_temperature", log=lambda *a: None)
+    _edit_first_narration(run, "softmax_temperature", "Start from the logits.")
+
+    summary, realized, logs = _rerun(tmp_path, monkeypatch, run)
+
+    assert "[approval] softmax_temperature: approval revoked: plan changed since approval" in logs
+    assert (
+        "[approval] softmax_temperature: re-rendering from plans/softmax_temperature.json" in logs
+    )
+    assert realized == [("softmax_temperature", "Start from the logits.")]
+    approvals = load_approvals(run)
+    assert approvals.approved == {}
+    assert approvals.revoked[0].revoked_reason == "plan changed since approval"
+    plan = load_plan(run / "plans" / "softmax_temperature.json")
+    assert plan.beats[0].narration == "Start from the logits."
+
+
+def test_rerun_keeps_approved_concepts_the_planner_did_not_return(tmp_path: Path, monkeypatch):
+    run = tmp_path / "run"
+    _accepted_run(run, cids=("softmax_temperature", "temperature_sweep"))
+    for cid in ("softmax_temperature", "temperature_sweep"):
+        approve_run(run, cid, log=lambda *a: None)
+
+    summary, realized, logs = _rerun(tmp_path, monkeypatch, run)
+
+    assert realized == []
+    assert "[approval] temperature_sweep: kept although this run did not plan it" in logs
+    assert [c["concept_id"] for c in summary["concepts"]] == [
+        "softmax_temperature",
+        "temperature_sweep",
+    ]
+
+
+def test_run_json_keeps_approved_concepts_when_realization_crashes(tmp_path: Path, monkeypatch):
+    import manim_engineer.pipeline.run as runmod
+
+    run = tmp_path / "run"
+    _accepted_run(run, cids=("softmax_temperature", "temperature_sweep"))
+    approve_run(run, "temperature_sweep", log=lambda *a: None)
+    src = tmp_path / "softmax.md"
+    src.write_text(MD)
+
+    def crash(*a, **k):
+        raise RuntimeError("simulated crash")
+
+    monkeypatch.setattr(runmod, "select_backend", lambda *a, **k: _backend())
+    monkeypatch.setattr(runmod, "realize_all", crash)
+    with pytest.raises(RuntimeError, match="simulated crash"):
+        run_pipeline(str(src), run, RunConfig(backend="fake", workers=1), log=lambda *a: None)
+
+    summary = RunDir(run).load_summary()
+    assert [c["concept_id"] for c in summary["concepts"]] == ["temperature_sweep"]
+    pin = load_approvals(run).approved["temperature_sweep"]
+    assert pin_problem(run, pin, summary["concepts"][0]) is None
+
+
+def test_live_replay_refuses_a_run_with_approved_concepts(tmp_path: Path):
+    run = tmp_path / "run"
+    _accepted_run(run)
+    approve_run(run, "softmax_temperature", log=lambda *a: None)
+    src = tmp_path / "softmax.md"
+    src.write_text(MD)
+    with pytest.raises(ApprovalError, match="live replay would overwrite them"):
+        run_live(str(src), run, RunConfig(backend="fake", workers=1), log=lambda *a: None)
+    res = CliRunner().invoke(main, ["live", str(src), "--out", str(run), "--backend", "fake"])
+    assert res.exit_code != 0 and "live replay would overwrite them" in res.output
+
+
+@pytest.mark.integration
+def test_approved_concept_survives_a_real_rerun(tmp_path: Path, monkeypatch):
+    import manim_engineer.pipeline.run as runmod
+
+    src = tmp_path / "softmax.md"
+    src.write_text(MD)
+    out = tmp_path / "run"
+    monkeypatch.setattr(runmod, "select_backend", lambda *a, **k: _backend())
+    cfg = RunConfig(
+        backend="fake",
+        quality="l",
+        workers=1,
+        gif_width=320,
+        gif_fps=8,
+        critique=False,
+        probe_pixel_height=480,
+    )
+    first = run_pipeline(str(src), out, cfg, log=lambda *a: None)
+    assert first["concepts"][0]["status"] == "accepted", first["concepts"][0]
+    res = CliRunner().invoke(main, ["approve", str(out), "softmax_temperature"])
+    assert res.exit_code == 0, res.output
+    manifest = Path(first["concepts"][0]["bundle_dir"], "manifest.json")
+    stamp = manifest.stat().st_mtime_ns
+
+    logs: list[str] = []
+    second = run_pipeline(str(src), out, cfg, log=logs.append)
+
+    assert manifest.stat().st_mtime_ns == stamp
+    assert any(
+        line.startswith("[approval] softmax_temperature: approved") and line.endswith("skipped")
+        for line in logs
+    )
+    assert second["concepts"][0]["accepted_code"] == first["concepts"][0]["accepted_code"]

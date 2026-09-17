@@ -16,6 +16,7 @@ from manim_engineer.pipeline.approval import (
     ApprovalError,
     ApprovalPin,
     approve_concept,
+    check_pins,
     load_approvals,
     revoke,
     save_approvals,
@@ -114,6 +115,61 @@ def ingest_source(source: str, rd: RunDir, cfg: RunConfig) -> Document:
     return doc
 
 
+def _settle_approvals(
+    rd: RunDir, previous: dict[str, Any], log=print
+) -> tuple[dict[str, dict[str, Any]], list[str]]:
+    """Keep run.json entries whose pin holds; revoke broken pins and say why."""
+    approvals = load_approvals(rd.path)
+    held, broken = check_pins(rd.path, previous, approvals)
+    entries = {c.get("concept_id"): c for c in previous.get("concepts", [])}
+    for cid, pin in held.items():
+        log(f"[approval] {cid}: approved {pin.approved_at} (pin {pin.pin[:12]}); skipped")
+    for cid, reason in broken.items():
+        revoke(approvals, cid, reason)
+        log(f"[approval] {cid}: approval revoked: {reason}")
+    if broken:
+        save_approvals(rd.path, approvals)
+    return {cid: entries[cid] for cid in held}, list(broken)
+
+
+def _merge_plans(
+    fresh: list[AnimationPlan],
+    rd: RunDir,
+    held: dict[str, dict[str, Any]],
+    broken: list[str],
+    log=print,
+) -> tuple[list[str], list[AnimationPlan]]:
+    """This run's concept order and the plans still to realize.
+
+    A held pin keeps its concept in place of a fresh plan. A broken pin renders the
+    plan on disk, which is how a hand edit survives a re-run.
+    """
+    from_disk: dict[str, AnimationPlan] = {}
+    for cid in broken:
+        try:
+            from_disk[cid] = load_plan(rd.plans / f"{cid}.json")
+            log(f"[approval] {cid}: re-rendering from plans/{cid}.json")
+        except (OSError, ValueError) as e:
+            log(
+                f"[approval] {cid}: plans/{cid}.json is unusable ({str(e)[:120]}); using this run's plan"
+            )
+    order: list[str] = []
+    to_realize: list[AnimationPlan] = []
+    for plan in fresh:
+        cid = plan.concept.concept_id
+        order.append(cid)
+        if cid not in held:
+            to_realize.append(from_disk.pop(cid, plan))
+    for cid in held:
+        if cid not in order:
+            order.append(cid)
+            log(f"[approval] {cid}: kept although this run did not plan it")
+    for cid, plan in from_disk.items():
+        order.append(cid)
+        to_realize.append(plan)
+    return order, to_realize
+
+
 def run_pipeline(
     source: str,
     out_dir: str | Path,
@@ -138,9 +194,11 @@ def run_pipeline(
             + (f": {x.hint[:100]}" if k == "triaged" and x else "")
         ),
     )
-    for p in plans:
-        save_plan(p, rd.plans)
     log(f"[plan] {len(plans)} plan(s), {len(skipped)} passage(s) skipped")
+    held, broken = _settle_approvals(rd, rd.load_summary(), log)
+    order, to_realize = _merge_plans(plans, rd, held, broken, log)
+    for p in to_realize:
+        save_plan(p, rd.plans)
     summary: dict[str, Any] = {
         "source": source,
         "title": doc.title,
@@ -148,21 +206,24 @@ def run_pipeline(
         "n_segments": len(doc.segments),
         "backend": backend.name,
         "config": cfg.to_dict(),
-        "plans": [p.concept.concept_id for p in plans],
+        "plans": order,
         "skipped": skipped,
-        "concepts": [],
+        # approved entries are saved before realization so a crash cannot drop them
+        "concepts": list(held.values()),
         "started_at": t0,
         **(case_meta or {}),
     }
     rd.save_summary(summary)
-    results = realize_all(plans, rd, backend, cfg, log)
-    summary["concepts"] = [_concept_entry(r, p) for p, r in results]
+    results = realize_all(to_realize, rd, backend, cfg, log)
+    realized = {p.concept.concept_id: _concept_entry(r, p) for p, r in results}
+    summary["concepts"] = [held[cid] if cid in held else realized[cid] for cid in order]
     summary["llm"] = backend.log.summary() if hasattr(backend, "log") else {}
     summary["elapsed_s"] = round(time.time() - t0, 1)
     rd.save_summary(summary)
     write_run_gallery(rd.path, summary)
+    statuses = [c.get("status") for c in summary["concepts"]]
     log(
-        f"[done] {sum(1 for _, r in results if r.status == 'accepted')}/{len(results)} accepted in {summary['elapsed_s']} s → {rd.path / 'index.html'}"
+        f"[done] {statuses.count('accepted')}/{len(statuses)} accepted ({len(held)} approved and kept) in {summary['elapsed_s']} s → {rd.path / 'index.html'}"
     )
     return summary
 
@@ -315,6 +376,12 @@ def run_live(
 
     cfg = cfg or RunConfig()
     rd = RunDir(out_dir).ensure()
+    approved = sorted(load_approvals(rd.path).approved)
+    if approved:
+        raise ApprovalError(
+            f"{rd.path} has approved concepts ({', '.join(approved)}); live replay would "
+            "overwrite them. Replay into a new --out directory."
+        )
     t0 = time.time()
     backend = _backend(cfg, rd)
     doc = ingest_source(source, rd, cfg) if not rd.document.exists() else load_document(rd.document)

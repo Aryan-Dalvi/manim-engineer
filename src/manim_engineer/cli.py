@@ -110,7 +110,10 @@ def run(source, out, constraints, **kw):
 def live(source, out, chunk, sleep, constraints, **kw):
     """Replay SOURCE as a live stream; plans and animations appear as concepts mature."""
     cfg = _cfg(constraints=list(constraints), **kw)
-    run_live(source, out, cfg, chunk=chunk, sleep_s=sleep)
+    try:
+        run_live(source, out, cfg, chunk=chunk, sleep_s=sleep)
+    except ApprovalError as e:
+        raise click.ClickException(str(e)) from e
 
 
 @main.command("plan")
