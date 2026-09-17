@@ -317,68 +317,44 @@ def test_live_replay_pipeline(tmp_path: Path, monkeypatch):
     assert any(e["event"] == "planned" for e in summary["timeline"])
 
 
-def test_run_gallery_writes_deck_of_accepted_and_needs_review_concepts(tmp_path: Path):
+def test_run_deck_holds_only_concepts_whose_approval_pin_holds(tmp_path: Path):
     run = tmp_path / "run"
-    concepts = []
-    for cid, status in (
-        ("softmax", "accepted"),
-        ("fallback_one", "needs_human"),
-        ("broken", "rejected"),
-    ):
-        bdir = run / "animations" / cid
-        (bdir / "sections").mkdir(parents=True)
-        (bdir / "sections" / "01_b1_intro.mp4").write_bytes(b"mp4")
-        bundle = ArtifactBundle(
-            plan_id=f"plan_{cid}",
-            concept_id=cid,
-            scene_class="Scene",
-            manim_version="0.19.2",
-            quality="480p15",
-            width=854,
-            height=480,
-            fps=15.0,
-            duration_s=2.0,
-            master_mp4="master.mp4",
-            sections=[
-                SectionArtifact(
-                    index=1,
-                    name="b1_intro",
-                    duration_s=2.0,
-                    mp4="sections/01_b1_intro.mp4",
-                    narration=f"{cid} narration",
-                )
-            ],
-        )
-        concepts.append(
-            {
-                "concept_id": cid,
-                "status": status,
-                "bundle_dir": str(bdir),
-                "bundle": bundle.model_dump(),
-                "plan": {"concept": {"title": cid.replace("_", " ").title()}},
-            }
-        )
-    summary = {
-        "title": "Softmax talk",
-        "source": str(tmp_path / "secret-talk-notes.md"),
-        "concepts": concepts,
-    }
+    summary = _accepted_run(
+        run, cids=("softmax_temperature", "temperature_sweep", "fallback_one", "broken")
+    )
+    by_id = {c["concept_id"]: c for c in summary["concepts"]}
+    by_id["fallback_one"]["status"] = "needs_human"
+    by_id["broken"].update(status="rejected", accepted_code=None, bundle=None, bundle_dir=None)
+    summary["source"] = str(tmp_path / "secret-talk-notes.md")
+    RunDir(run).save_summary(summary)
+    for cid in ("softmax_temperature", "temperature_sweep", "fallback_one"):
+        approve_run(run, cid, log=lambda *a: None)
+    # an edit after approval takes the concept out of the deck and the gallery says why
+    _edit_first_narration(run, "temperature_sweep", "Edited after approval.")
+
     write_run_gallery(run, summary)
+
     deck = (run / "deck.html").read_text()
-    assert re.findall(r'data-concept="([^"]+)"', deck) == ["softmax", "fallback_one"]
-    assert re.findall(r'data-concept="([^"]+)"[^>]*data-needs-review="true"', deck) == [
-        "fallback_one"
-    ]
+    assert re.findall(r'data-concept="([^"]+)"', deck) == ["softmax_temperature", "fallback_one"]
+    assert "data-needs-review" not in deck  # approval is the review
     # a local input path is never printed on a slide the audience sees
     assert "secret-talk-notes" not in deck
-    assert 'href="deck.html"' in (run / "index.html").read_text()
+    gallery = (run / "index.html").read_text()
+    assert 'href="deck.html"' in gallery
+    assert 'class="badge approved"' in gallery
+    assert "approval stale: plan changed since approval" in gallery
+    assert "copyApprove('temperature_sweep')" in gallery
+    assert "copyApprove('softmax_temperature')" not in gallery
 
-    # once nothing is presentable, the stale deck and its link are removed
-    for c in concepts:
-        c["status"] = "rejected"
+    # once no pin holds, the stale deck and its link are removed
+    for cid in ("softmax_temperature", "fallback_one"):
+        unapprove_run(run, cid, log=lambda *a: None)
     write_run_gallery(run, summary)
     assert not (run / "deck.html").exists()
-    assert "deck.html" not in (run / "index.html").read_text()
+    gallery = (run / "index.html").read_text()
+    assert "deck.html" not in gallery
+    assert "approve a concept to build the presenter deck" in gallery
+    assert "approval revoked: unapproved" in gallery
 
 
 def test_cli_help_lists_commands():

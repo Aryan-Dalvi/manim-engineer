@@ -11,8 +11,12 @@ from jinja2 import Template
 
 from manim_engineer.core import ArtifactBundle
 from manim_engineer.output import DeckEntry, build_revealjs
-
-DECK_STATUSES = ("accepted", "needs_human")
+from manim_engineer.pipeline.approval import (
+    APPROVABLE_STATUSES,
+    ApprovalPin,
+    check_pins,
+    load_approvals,
+)
 
 RUN_TEMPLATE = Template(
     r"""<!doctype html>
@@ -25,7 +29,7 @@ h1{font-size:22px;margin:0 0 4px}h2{font-size:18px;margin:0}a{color:var(--acc)}
 .meta{color:var(--mute);font-size:13px;margin-bottom:18px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:0 0 20px}
 .badge{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);margin-left:8px;vertical-align:middle}
-.accepted{color:var(--ok);border-color:var(--ok)}.needs_human{color:var(--warn);border-color:var(--warn)}.rejected{color:var(--bad);border-color:var(--bad)}
+.accepted,.approved{color:var(--ok);border-color:var(--ok)}.needs_human,.stale,.revoked{color:var(--warn);border-color:var(--warn)}.rejected{color:var(--bad);border-color:var(--bad)}
 .row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
 .gif{max-width:100%;border-radius:8px;border:1px solid var(--line);background:#000}
 .main{flex:2 1 520px}.side{flex:1 1 300px;font-size:13px}
@@ -43,13 +47,14 @@ button{background:var(--acc);color:#000;border:0;border-radius:8px;padding:6px 1
 .skipped{color:var(--mute);font-size:13px}
 </style></head><body>
 <h1>{{ title }}</h1>
-<div class="meta">source: <code>{{ source }}</code> · modality {{ modality }} · {{ n_segments }} segments · backend {{ backend }} · {{ llm.calls }} LLM calls, {{ llm.duration_s }} s · wall {{ elapsed_s }} s · {{ accepted }} accepted / {{ needs_human }} needs review / {{ rejected }} rejected{% if deck %} · <a href="{{ deck }}">presenter deck</a>{% endif %}</div>
+<div class="meta">source: <code>{{ source }}</code> · modality {{ modality }} · {{ n_segments }} segments · backend {{ backend }} · {{ llm.calls }} LLM calls, {{ llm.duration_s }} s · wall {{ elapsed_s }} s · {{ accepted }} accepted / {{ needs_human }} needs review / {{ rejected }} rejected · {{ approved }} approved{% if deck %} · <a href="{{ deck }}">presenter deck</a>{% elif approvable %} · approve a concept to build the presenter deck{% endif %}</div>
 
 {% for c in concepts %}
 <div class="card" id="{{ c.concept_id }}">
-  <h2>{{ c.title }} <span class="badge {{ c.status }}">{{ c.status }}</span> <span class="badge">{{ c.archetype }}</span> <span class="badge">{{ c.duration }}</span></h2>
+  <h2>{{ c.title }} <span class="badge {{ c.status }}">{{ c.status }}</span>{% if c.approval %} <span class="badge {{ c.approval.state }}" title="{{ c.approval.detail }}">{{ c.approval.label }}</span>{% endif %} <span class="badge">{{ c.archetype }}</span> <span class="badge">{{ c.duration }}</span></h2>
   <div class="claim"><b>Claim:</b> {{ c.claim }}</div>
   <div class="meta">sources: {{ c.sources }} · concept id <code>{{ c.concept_id }}</code> · attempts {{ c.n_attempts }}{% if c.used_fallback %} · <b>template fallback</b>{% endif %}</div>
+  {% if c.approval and c.approval.state != "approved" %}<div class="find warn">{{ c.approval.label }}: {{ c.approval.detail }}</div>{% endif %}
   <div class="row">
     <div class="main">
       {% if c.full_gif %}<img class="gif" src="{{ c.full_gif }}" alt="{{ c.title }}">{% elif c.thumb %}<img class="gif" src="{{ c.thumb }}">{% else %}<div class="skipped">no animation produced</div>{% endif %}
@@ -65,7 +70,7 @@ button{background:var(--acc);color:#000;border:0;border-radius:8px;padding:6px 1
       {% if c.history %}<details><summary>attempt history</summary>{% for h in c.history %}<div class="find">#{{ h.attempt }} {{ h.kind }}{% if h.model %} ({{ h.model }}){% endif %}: tier0 {{ h.tier0_ok }}, tier1 {{ h.tier1_ok }}{% if h.tier2_ok is not none %}, tier2 {{ h.tier2_ok }}{% endif %} · {{ h.n_fatal }} fatal · <a href="{{ h.code }}">code</a></div>{% endfor %}</details>{% endif %}
       <details open><summary>your feedback</summary>
         <textarea data-cid="{{ c.concept_id }}" placeholder="e.g. make the arrows blue and slow down the last beat"></textarea>
-        <div style="margin-top:6px"><button onclick="copyCmd('{{ c.concept_id }}')">copy revise command</button> <span class="meta" id="msg-{{ c.concept_id }}"></span></div>
+        <div style="margin-top:6px"><button onclick="copyCmd('{{ c.concept_id }}')">copy revise command</button>{% if c.approvable %} <button onclick="copyApprove('{{ c.concept_id }}')">copy approve command</button>{% endif %} <span class="meta" id="msg-{{ c.concept_id }}"></span></div>
       </details>
     </div>
   </div>
@@ -76,6 +81,7 @@ button{background:var(--acc);color:#000;border:0;border-radius:8px;padding:6px 1
 <script>
 function copyCmd(cid){const t=document.querySelector('textarea[data-cid="'+cid+'"]').value.trim();if(!t){document.getElementById('msg-'+cid).textContent='type a note first';return;}
 const cmd='manim-engineer revise "{{ run_dir }}" '+cid+' --note '+JSON.stringify(t);navigator.clipboard.writeText(cmd).then(()=>{document.getElementById('msg-'+cid).textContent='copied: '+cmd;});}
+function copyApprove(cid){const cmd='manim-engineer approve "{{ run_dir }}" '+cid;navigator.clipboard.writeText(cmd).then(()=>{document.getElementById('msg-'+cid).textContent='copied: '+cmd;});}
 </script>
 </body></html>
 """
@@ -104,12 +110,12 @@ def _rel(base: Path, p: str | Path | None) -> str | None:
 
 
 def write_run_deck(run_dir: Path, summary: dict[str, Any]) -> Path | None:
-    """Reveal.js deck of every accepted or needs-review animation, in plan order."""
+    """Reveal.js deck of every approved animation whose pin still holds, in run order."""
     run_dir = Path(run_dir)
+    held, _ = check_pins(run_dir, summary, load_approvals(run_dir))
     entries = []
     for c in summary.get("concepts", []):
-        status = str(c.get("status", ""))
-        if status not in DECK_STATUSES or not c.get("bundle") or not c.get("bundle_dir"):
+        if c.get("concept_id") not in held or not c.get("bundle") or not c.get("bundle_dir"):
             continue
         plan = c.get("plan") or {}
         entries.append(
@@ -117,7 +123,6 @@ def write_run_deck(run_dir: Path, summary: dict[str, Any]) -> Path | None:
                 title=plan.get("concept", {}).get("title") or c["concept_id"],
                 bundle=ArtifactBundle.model_validate(c["bundle"]),
                 bundle_dir=Path(c["bundle_dir"]),
-                needs_review=status == "needs_human",
             )
         )
     source = str(summary.get("source", ""))
@@ -134,9 +139,30 @@ def write_run_deck(run_dir: Path, summary: dict[str, Any]) -> Path | None:
     return deck
 
 
+def _approval_view(
+    cid: str,
+    held: dict[str, ApprovalPin],
+    broken: dict[str, str],
+    revoked: dict[str, ApprovalPin],
+) -> dict[str, str] | None:
+    if cid in held:
+        by = f" by {held[cid].author}" if held[cid].author else ""
+        detail = f"approved {held[cid].approved_at}{by}"
+        return {"state": "approved", "label": "approved", "detail": html.escape(detail)}
+    if cid in broken:
+        return {"state": "stale", "label": "approval stale", "detail": html.escape(broken[cid])}
+    if cid in revoked:
+        reason = revoked[cid].revoked_reason or ""
+        return {"state": "revoked", "label": "approval revoked", "detail": html.escape(reason)}
+    return None
+
+
 def write_run_gallery(run_dir: Path, summary: dict[str, Any]) -> Path:
     run_dir = Path(run_dir)
     deck = write_run_deck(run_dir, summary)
+    approvals = load_approvals(run_dir)
+    held, broken = check_pins(run_dir, summary, approvals)
+    revoked = {p.concept_id: p for p in approvals.revoked}  # the latest revocation wins
     concepts = []
     for c in summary.get("concepts", []):
         bundle = c.get("bundle") or {}
@@ -219,6 +245,10 @@ def write_run_gallery(run_dir: Path, summary: dict[str, Any]) -> Path:
                     for f in c.get("final_findings", [])
                 ],
                 "history": history,
+                "approval": _approval_view(c["concept_id"], held, broken, revoked),
+                "approvable": c.get("status") in APPROVABLE_STATUSES
+                and bool(c.get("accepted_code"))
+                and c["concept_id"] not in held,
             }
         )
     order = {"accepted": 0, "needs_human": 1, "rejected": 2}
@@ -234,6 +264,8 @@ def write_run_gallery(run_dir: Path, summary: dict[str, Any]) -> Path:
         accepted=sum(1 for c in concepts if c["status"] == "accepted"),
         needs_human=sum(1 for c in concepts if c["status"] == "needs_human"),
         rejected=sum(1 for c in concepts if c["status"] == "rejected"),
+        approved=len(held),
+        approvable=any(c["approvable"] for c in concepts),
         concepts=concepts,
         skipped=summary.get("skipped", []),
         run_dir=str(run_dir),
