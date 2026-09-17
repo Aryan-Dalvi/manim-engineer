@@ -40,11 +40,12 @@ _TEMPLATE = Environment(autoescape=True).from_string(
 <link rel="stylesheet" href="{{ assets }}/reveal.css">
 <style>
 html,body,.reveal-viewport{background:#0f1115}
-.reveal{color:#e6e6e6;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-.reveal h1{font-size:1.9em;font-weight:700;margin:0 0 .3em;color:#e6e6e6}
+/* No Reveal theme is loaded, so set the 42px base its 6.0.2 black theme declares; em sizes would otherwise follow the browser's 16px. */
+.reveal{color:#e6e6e6;font-size:42px;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.reveal h1{font-size:1.4em;font-weight:700;margin:0 0 .3em;color:#e6e6e6}
 .reveal .sub{font-size:.55em;color:#9aa4b2}
 .reveal video{display:block;margin:0 auto;max-width:100%;max-height:640px}
-.reveal .cap{font-size:.42em;color:#9aa4b2;margin-top:.5em}
+.reveal .cap{font-size:.5em;color:#9aa4b2;margin-top:.4em}
 .reveal .review{color:#0f1115;background:#f9e04c;border-radius:4px;padding:.05em .4em;font-weight:600}
 </style></head><body>
 <div class="reveal"><div class="slides">
