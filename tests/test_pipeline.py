@@ -1,10 +1,12 @@
 import json
+import re
 from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
 
 from manim_engineer.cli import main
+from manim_engineer.core import ArtifactBundle, SectionArtifact
 from manim_engineer.llm import FakeBackend, LLMRequest
 from manim_engineer.pipeline import (
     RepairPolicy,
@@ -14,6 +16,7 @@ from manim_engineer.pipeline import (
     run_live,
     run_pipeline,
 )
+from manim_engineer.pipeline.gallery import write_run_gallery
 from manim_engineer.pipeline.realize import realize_plan
 from manim_engineer.planning import load_plan
 
@@ -231,6 +234,70 @@ def test_live_replay_pipeline(tmp_path: Path, monkeypatch):
     assert summary["mode"] == "live" and summary["concepts"]
     assert summary["concepts"][0]["status"] == "accepted"
     assert any(e["event"] == "planned" for e in summary["timeline"])
+
+
+def test_run_gallery_writes_deck_of_accepted_and_needs_review_concepts(tmp_path: Path):
+    run = tmp_path / "run"
+    concepts = []
+    for cid, status in (
+        ("softmax", "accepted"),
+        ("fallback_one", "needs_human"),
+        ("broken", "rejected"),
+    ):
+        bdir = run / "animations" / cid
+        (bdir / "sections").mkdir(parents=True)
+        (bdir / "sections" / "01_b1_intro.mp4").write_bytes(b"mp4")
+        bundle = ArtifactBundle(
+            plan_id=f"plan_{cid}",
+            concept_id=cid,
+            scene_class="Scene",
+            manim_version="0.19.2",
+            quality="480p15",
+            width=854,
+            height=480,
+            fps=15.0,
+            duration_s=2.0,
+            master_mp4="master.mp4",
+            sections=[
+                SectionArtifact(
+                    index=1,
+                    name="b1_intro",
+                    duration_s=2.0,
+                    mp4="sections/01_b1_intro.mp4",
+                    narration=f"{cid} narration",
+                )
+            ],
+        )
+        concepts.append(
+            {
+                "concept_id": cid,
+                "status": status,
+                "bundle_dir": str(bdir),
+                "bundle": bundle.model_dump(),
+                "plan": {"concept": {"title": cid.replace("_", " ").title()}},
+            }
+        )
+    summary = {
+        "title": "Softmax talk",
+        "source": str(tmp_path / "secret-talk-notes.md"),
+        "concepts": concepts,
+    }
+    write_run_gallery(run, summary)
+    deck = (run / "deck.html").read_text()
+    assert re.findall(r'data-concept="([^"]+)"', deck) == ["softmax", "fallback_one"]
+    assert re.findall(r'data-concept="([^"]+)"[^>]*data-needs-review="true"', deck) == [
+        "fallback_one"
+    ]
+    # a local input path is never printed on a slide the audience sees
+    assert "secret-talk-notes" not in deck
+    assert 'href="deck.html"' in (run / "index.html").read_text()
+
+    # once nothing is presentable, the stale deck and its link are removed
+    for c in concepts:
+        c["status"] = "rejected"
+    write_run_gallery(run, summary)
+    assert not (run / "deck.html").exists()
+    assert "deck.html" not in (run / "index.html").read_text()
 
 
 def test_cli_help_lists_commands():
