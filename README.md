@@ -66,3 +66,6 @@ uv sync --all-extras --group dev
 .venv/bin/ruff format src tests && .venv/bin/ruff check src tests
 ./.beryl/scripts/check.sh           # the deterministic gate
 ```
+
+On macOS, see [docs/macos-setup.md](docs/macos-setup.md) for toolchain prerequisites
+and the pycairo workaround.
