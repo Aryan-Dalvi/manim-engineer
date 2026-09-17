@@ -83,3 +83,29 @@ again — re-run the last line afterwards.
 `doctor` should list `manim`, `python`, `ffmpeg`, `ffprobe`, `latex`, `dvisvgm`
 and an available backend. `faster-whisper` shows as missing unless you install
 the optional `audio` extra.
+
+## 6. Installed tools reported as missing
+
+If `doctor` reports `latex`, `dvisvgm`, `ffmpeg` and `ffprobe` as missing on a
+machine where they are installed, the cause is `PATH`, not the toolchain. Both
+directories are listed in `/etc/paths.d`:
+
+```
+/Library/TeX/texbin
+/opt/homebrew/bin
+```
+
+macOS adds those to `PATH` through `path_helper`, which runs for login shells.
+Environments that do not run it — some CI runners, editor terminals and agent
+sessions — inherit a `PATH` without them, so every `Tex`/`MathTex` render fails
+with `FileNotFoundError: [Errno 2] No such file or directory: 'latex'`. Eight
+tests across `test_verification.py`, `test_generation.py` and `test_pipeline.py`
+fail together, which looks like a code regression and is not one.
+
+Confirm with `command -v latex ffmpeg`, then prefix the path for that shell:
+
+```bash
+export PATH="/opt/homebrew/bin:/Library/TeX/texbin:$PATH"
+```
+
+The suite is green once both resolve; no reinstall is needed.
