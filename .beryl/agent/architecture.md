@@ -14,8 +14,8 @@ whose `__init__.py` is its only public entry point.
 | generation | Knowledge pack, codegen and repair prompts, archetype router | Rendering, verification | `src/manim_engineer/generation/__init__.py` |
 | kit | Runtime library imported by generated scenes (style contract, safe helpers, layout builders) | Anything that talks to an LLM | `src/manim_engineer/kit/__init__.py` |
 | verification | Tier 0 static, Tier 1 probe, Tier 2 frames + critique, sandbox runner, finding formatting | Deciding repair policy | `src/manim_engineer/verification/__init__.py` |
-| output | Render at quality, ffmpeg derivatives, manifest, manim-slides bridge | Gallery HTML | `src/manim_engineer/output/__init__.py` |
-| pipeline | Orchestrator, run directory, repair policy, gallery, review/revise, CLI | Domain rules of other contexts | `src/manim_engineer/pipeline/__init__.py`, `src/manim_engineer/cli.py` |
+| output | Render at quality, ffmpeg derivatives, manifest, PPTX and Reveal.js deck builders, vendored Reveal.js assets | Gallery HTML, choosing which concepts a run deck includes | `src/manim_engineer/output/__init__.py` |
+| pipeline | Orchestrator, run directory, repair policy, gallery, run deck, review/revise, CLI | Domain rules of other contexts | `src/manim_engineer/pipeline/__init__.py`, `src/manim_engineer/cli.py` |
 
 ## Boundary Rules
 

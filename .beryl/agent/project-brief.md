@@ -38,7 +38,7 @@ recorded transcript, slides, YouTube, audio, or manuscript**.
 | Anthropic SDK | LLM backend when an API key exists | `llm.AnthropicBackend` | Same as above |
 | ManimCE 0.19.x | Rendering and the Tier 1 layout probe | `verification.runner`, `output.render` | Findings with category `manim_runtime`, `timeout`, `oom` |
 | ffmpeg | GIF, stills, PPT-safe MP4 | `output.derivatives` | Bundle published without derivatives, flagged in manifest |
-| manim-slides | Optional HTML/PPTX/PDF decks | `output.slides` | Skipped with a warning |
+| Reveal.js 6.0.2 (vendored) | Offline HTML presenter deck per run | `output.revealjs`, `pipeline.gallery` | No deck when no clip is playable |
 | faster-whisper | Audio to timestamped transcript | `ingest.audio` | Error if model unavailable |
 | yt-dlp, youtube-transcript-api | YouTube captions and audio | `ingest.youtube` | Captions fail → download audio → faster-whisper |
 | PyMuPDF, python-pptx | PDF and PPTX slides and manuscripts | `ingest.slides`, `ingest.manuscript` | Error with the failing page |
