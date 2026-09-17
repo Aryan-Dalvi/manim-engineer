@@ -6,6 +6,12 @@ import json
 from pathlib import Path
 
 from manim_engineer.core import Document
+from manim_engineer.ingest.arxiv import (
+    arxiv_id,
+    document_from_latex,
+    is_arxiv,
+    load_arxiv,
+)
 from manim_engineer.ingest.audio import load_audio, whisper_transcriber
 from manim_engineer.ingest.common import Cue, doc_id_for, group_cues
 from manim_engineer.ingest.manuscript import document_from_markdown, load_markdown, load_pdf_paper
@@ -13,7 +19,17 @@ from manim_engineer.ingest.slides import load_pdf_deck, load_pptx, pdf_is_deck
 from manim_engineer.ingest.transcript import document_from_cues, load_transcript
 from manim_engineer.ingest.youtube import is_youtube, load_youtube, video_id
 
-KINDS = ("transcript", "markdown", "pdf", "pdf-deck", "pdf-paper", "pptx", "audio", "youtube")
+KINDS = (
+    "arxiv",
+    "transcript",
+    "markdown",
+    "pdf",
+    "pdf-deck",
+    "pdf-paper",
+    "pptx",
+    "audio",
+    "youtube",
+)
 AUDIO_SUFFIXES = {".mp3", ".wav", ".m4a", ".flac", ".ogg", ".mp4", ".mkv", ".webm"}
 TRANSCRIPT_SUFFIXES = {".json", ".vtt", ".srt"}
 
@@ -21,6 +37,8 @@ TRANSCRIPT_SUFFIXES = {".json", ".vtt", ".srt"}
 def detect_kind(source: str) -> str:
     if is_youtube(source):
         return "youtube"
+    if is_arxiv(source) and not Path(source).exists():
+        return "arxiv"
     suffix = Path(source).suffix.lower()
     if suffix in TRANSCRIPT_SUFFIXES:
         return "transcript"
@@ -45,6 +63,8 @@ def ingest(
     """Normalize any supported input into a Document. `workdir` receives assets and downloads."""
     kind = kind or detect_kind(source)
     wd = Path(workdir) if workdir else None
+    if kind == "arxiv":
+        return load_arxiv(source, title=title, workdir=wd, **opts)
     if kind == "youtube":
         return load_youtube(source, title=title, workdir=wd, **opts)
     if kind == "transcript":
@@ -77,12 +97,16 @@ def load_document(path: str | Path) -> Document:
 __all__ = [
     "KINDS",
     "Cue",
+    "arxiv_id",
     "detect_kind",
     "doc_id_for",
     "document_from_cues",
+    "document_from_latex",
     "document_from_markdown",
     "group_cues",
     "ingest",
+    "is_arxiv",
+    "load_arxiv",
     "load_audio",
     "load_document",
     "load_markdown",
