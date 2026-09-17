@@ -16,6 +16,7 @@ from manim_engineer.core import (
 from manim_engineer.llm import FakeBackend
 from manim_engineer.verification import (
     check_alignment,
+    check_equation_provenance,
     critique,
     run_tier0,
     verify_tier0,
@@ -139,6 +140,43 @@ def test_critique_maps_scores_and_issues(tmp_path: Path):
     assert rep.scores["logical_flow"] == 1.0
     assert rep.findings[0].fix == "FadeOut title before b2"
     assert fb.requests[0].images == [str(img)]
+
+
+SOFTMAX = r"p_i = \frac{e^{z_i/T}}{\sum_j e^{z_j/T}}"
+
+
+def _sourced_plan():
+    p = _plan()
+    p.provenance = Provenance(
+        equations=[
+            Equation(label="eq:softmax", latex=SOFTMAX, para_id="sec1.eq1", verbatim=True),
+        ]
+    )
+    return p
+
+
+def test_fidelity_blocks_when_a_source_equation_is_missing():
+    findings = check_equation_provenance(_sourced_plan(), "from manim_engineer.kit import *\n")
+    f = next(f for f in findings if f.gate == "fidelity")
+    assert f.severity == Severity.FATAL and "eq:softmax" in f.message and f.fix
+
+
+def test_fidelity_stays_advisory_without_a_source_ledger():
+    # transcript input: the plan's equations are the model's own, so nothing blocks
+    findings = check_equation_provenance(_plan(), "from manim_engineer.kit import *\n")
+    assert findings and all(f.severity == Severity.INFO for f in findings)
+
+
+def test_fidelity_flags_altered_source_equation_and_warns_on_extras():
+    altered = r'MathTex(r"p_i = \frac{e^{z_i}}{\sum_j e^{z_j/T}}")'
+    extra = r'MathTex(r"\lim_{n \to \infty} H(p) = \log n")'
+    code = f"from manim_engineer.kit import *\nx = {altered}\ny = {extra}\n"
+    findings = check_equation_provenance(_sourced_plan(), code)
+    assert any(
+        f.severity == Severity.FATAL and "alters source equation" in f.message for f in findings
+    )
+    assert any(f.severity == Severity.WARN and "not in the source" in f.message for f in findings)
+    assert all(f.fix for f in findings)
 
 
 def test_text_floor_scales_with_probe_resolution():

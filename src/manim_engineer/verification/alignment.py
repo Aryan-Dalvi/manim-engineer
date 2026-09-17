@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import ast
+from difflib import SequenceMatcher
+
 from manim_engineer.core import AnimationPlan, Finding, Severity
 from manim_engineer.verification.probe import Keyframe
+from manim_engineer.verification.static import collect_tex_literals
 
 WORDS_PER_SECOND = 2.5
+MIN_EQ_CHARS = 6
+RESEMBLES_RATIO = 0.82
 
 
 def section_durations(frames: list[Keyframe]) -> dict[str, float]:
@@ -94,26 +100,87 @@ def check_alignment(plan: AnimationPlan, frames: list[Keyframe]) -> list[Finding
     return out
 
 
-def check_equation_provenance(plan: AnimationPlan, code: str) -> list[Finding]:
-    """Every provenance equation should appear (normalized) somewhere in the code.
+def _norm(s: str) -> str:
+    return (
+        "".join(s.split())
+        .replace("\\left", "")
+        .replace("\\right", "")
+        .replace("\\,", "")
+        .replace("\\!", "")
+    )
 
-    Advisory: the generator may legitimately split an equation into parts.
+
+def _in_code(key: str, code_n: str) -> bool:
+    """The generator may split one equation across MathTex parts, so a prefix counts."""
+    if len(key) < MIN_EQ_CHARS:
+        return True
+    return key in code_n or key[: max(MIN_EQ_CHARS, len(key) // 2)] in code_n
+
+
+def check_equation_provenance(plan: AnimationPlan, code: str) -> list[Finding]:
+    """Equations on screen must be the source's equations.
+
+    This blocks only when the plan carries equations read from the source
+    document (`verbatim`). For transcript, audio or slide input the plan's
+    equations are the model's own, so every finding stays advisory and the
+    unsourced-equation sweep is skipped entirely.
     """
     out: list[Finding] = []
+    code_n = _norm(code)
+    sourced = [e for e in plan.provenance.equations if e.verbatim and e.latex]
 
-    def norm(s: str) -> str:
-        return "".join(s.split()).replace("\\left", "").replace("\\right", "").replace("\\,", "")
-
-    code_n = norm(code)
     for eq in plan.provenance.equations:
-        key = norm(eq.latex)
-        if len(key) >= 6 and key not in code_n and key[: max(6, len(key) // 2)] not in code_n:
+        if not eq.latex or _in_code(_norm(eq.latex), code_n):
+            continue
+        if eq.verbatim:
+            out.append(
+                Finding(
+                    gate="fidelity",
+                    severity=Severity.FATAL,
+                    message=f"source equation '{eq.label}' is not on screen",
+                    fix=f'Render it verbatim: MathTex(r"{eq.latex}")',
+                )
+            )
+        else:
             out.append(
                 Finding(
                     gate="fidelity",
                     severity=Severity.INFO,
                     message=f"provenance equation '{eq.label}' not found verbatim in the code",
                     fix=f"Use the source equation as written: {eq.latex}",
+                )
+            )
+
+    if not sourced:
+        return out
+    known = [_norm(e.latex) for e in plan.provenance.equations if e.latex]
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return out  # the parse gate already reported this
+    for lineno, kind, literal in collect_tex_literals(tree):
+        lit = _norm(literal)
+        if len(lit) < MIN_EQ_CHARS or any(lit in k or k in lit for k in known):
+            continue
+        near = max(sourced, key=lambda e: SequenceMatcher(None, lit, _norm(e.latex)).ratio())
+        if SequenceMatcher(None, lit, _norm(near.latex)).ratio() >= RESEMBLES_RATIO:
+            out.append(
+                Finding(
+                    gate="fidelity",
+                    severity=Severity.FATAL,
+                    line=lineno,
+                    message=f"{kind} alters source equation '{near.label}': {literal!r}",
+                    fix=f"Use the source form exactly: {near.latex}",
+                )
+            )
+        else:
+            out.append(
+                Finding(
+                    gate="fidelity",
+                    severity=Severity.WARN,
+                    line=lineno,
+                    message=f"{kind} shows an equation that is not in the source: {literal!r}",
+                    fix="Derive it from a provenance equation or drop it.",
                 )
             )
     return out
