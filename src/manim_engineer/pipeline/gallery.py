@@ -1,4 +1,4 @@
-"""Static HTML galleries: one per run, plus an index across runs."""
+"""Static HTML for a run: its review gallery and presenter deck, plus an index across runs."""
 
 from __future__ import annotations
 
@@ -8,6 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from jinja2 import Template
+
+from manim_engineer.core import ArtifactBundle
+from manim_engineer.output import DeckEntry, build_revealjs
+
+DECK_STATUSES = ("accepted", "needs_human")
 
 RUN_TEMPLATE = Template(
     r"""<!doctype html>
@@ -38,7 +43,7 @@ button{background:var(--acc);color:#000;border:0;border-radius:8px;padding:6px 1
 .skipped{color:var(--mute);font-size:13px}
 </style></head><body>
 <h1>{{ title }}</h1>
-<div class="meta">source: <code>{{ source }}</code> · modality {{ modality }} · {{ n_segments }} segments · backend {{ backend }} · {{ llm.calls }} LLM calls, {{ llm.duration_s }} s · wall {{ elapsed_s }} s · {{ accepted }} accepted / {{ needs_human }} needs review / {{ rejected }} rejected</div>
+<div class="meta">source: <code>{{ source }}</code> · modality {{ modality }} · {{ n_segments }} segments · backend {{ backend }} · {{ llm.calls }} LLM calls, {{ llm.duration_s }} s · wall {{ elapsed_s }} s · {{ accepted }} accepted / {{ needs_human }} needs review / {{ rejected }} rejected{% if deck %} · <a href="{{ deck }}">presenter deck</a>{% endif %}</div>
 
 {% for c in concepts %}
 <div class="card" id="{{ c.concept_id }}">
@@ -98,8 +103,40 @@ def _rel(base: Path, p: str | Path | None) -> str | None:
         return str(p)
 
 
+def write_run_deck(run_dir: Path, summary: dict[str, Any]) -> Path | None:
+    """Reveal.js deck of every accepted or needs-review animation, in plan order."""
+    run_dir = Path(run_dir)
+    entries = []
+    for c in summary.get("concepts", []):
+        status = str(c.get("status", ""))
+        if status not in DECK_STATUSES or not c.get("bundle") or not c.get("bundle_dir"):
+            continue
+        plan = c.get("plan") or {}
+        entries.append(
+            DeckEntry(
+                title=plan.get("concept", {}).get("title") or c["concept_id"],
+                bundle=ArtifactBundle.model_validate(c["bundle"]),
+                bundle_dir=Path(c["bundle_dir"]),
+                needs_review=status == "needs_human",
+            )
+        )
+    source = str(summary.get("source", ""))
+    path = run_dir / "deck.html"
+    deck = build_revealjs(
+        entries,
+        path,
+        title=summary.get("title") or run_dir.name,
+        # a local input path would otherwise be shown to the audience
+        subtitle=source if source.startswith(("http://", "https://")) else "",
+    )
+    if deck is None:
+        path.unlink(missing_ok=True)
+    return deck
+
+
 def write_run_gallery(run_dir: Path, summary: dict[str, Any]) -> Path:
     run_dir = Path(run_dir)
+    deck = write_run_deck(run_dir, summary)
     concepts = []
     for c in summary.get("concepts", []):
         bundle = c.get("bundle") or {}
@@ -200,6 +237,7 @@ def write_run_gallery(run_dir: Path, summary: dict[str, Any]) -> Path:
         concepts=concepts,
         skipped=summary.get("skipped", []),
         run_dir=str(run_dir),
+        deck=_rel(run_dir, deck) if deck else None,
     )
     path = run_dir / "index.html"
     path.write_text(out)

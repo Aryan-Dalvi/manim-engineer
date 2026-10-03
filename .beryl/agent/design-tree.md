@@ -33,6 +33,8 @@ gallery, and revisions flow back through the plan.
 | Section naming | Manim section name equals plan beat id | 2026-09-14 | 0003 |
 | Source fidelity severity | Blocks when the plan carries verbatim source equations; advisory otherwise | 2026-09-17 | 0007 |
 | Paper equations | Read from LaTeX source into an equation ledger; never re-typed by a model | 2026-09-17 | 0007 |
+| Presenter deck | Reveal.js 6.0.2 vendored, one slide per beat clip, narration as notes; no manim-slides | 2026-09-17 | 0008 |
+| Deck scope | Accepted and needs_human concepts, the latter marked "needs review" | 2026-09-17 | 0008 |
 
 ## Pressure Points
 
@@ -44,7 +46,8 @@ gallery, and revisions flow back through the plan.
 - LaTeX cache races between parallel workers: the probe uses a per-process media directory.
 - Adjacent buckets that triage to the same concept name are merged before planning (e1 produced duplicates before this).
 - The critic must not see the faded-out last frame of a section; frames are the most informative of three candidates per beat.
-- YouTube access is fragile; audio fallback exists. manim-slides lags Manim releases; the deck is built with python-pptx instead.
+- YouTube access is fragile; audio fallback exists.
+- Decks are built from section clips rather than manim-slides (generated scenes subclass `Scene`, not `Slide`): python-pptx for PPTX and vendored Reveal.js for HTML. Upgrading Reveal.js means replacing all vendored files together.
 - The fidelity gate's resemblance threshold (0.82) separates "altered source equation" (fatal) from "not in the source" (warn). It is uncalibrated: no corpus run has exercised it yet, and a paper whose prose restates a formula in a slightly different form is the likely first false positive.
 - `Provenance.macros` carries a paper's `\newcommand` definitions into the plan, but nothing injects them into the render's `TexTemplate` yet, so an equation depending on a paper macro passes the fidelity gate and then fails to compile.
 
