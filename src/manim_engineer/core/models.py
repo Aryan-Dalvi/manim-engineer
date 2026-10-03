@@ -13,7 +13,9 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-SCHEMA_VERSION = "1.1"
+from manim_engineer.core.preamble import TEX_PACKAGE_ALLOWLIST, parse_macro_definitions
+
+SCHEMA_VERSION = "1.2"
 
 # --------------------------------------------------------------------------- enums
 
@@ -192,7 +194,18 @@ class Provenance(BaseModel):
     quotes: list[str] = Field(default_factory=list)
     equations: list[Equation] = Field(default_factory=list)
     segment_ids: list[str] = Field(default_factory=list)
-    macros: str = ""  # source \newcommand definitions the equations depend on
+    # The source preamble (ADR 0010): allowlisted TeX packages the source loads, and
+    # its macro definitions as written. Applied to every TeX compile of the scene.
+    packages: list[str] = Field(default_factory=list)
+    macros: str = ""
+
+    @field_validator("packages")
+    @classmethod
+    def _allowlisted(cls, v: list[str]) -> list[str]:
+        outside = [p for p in v if p not in TEX_PACKAGE_ALLOWLIST]
+        if outside:
+            raise ValueError(f"TeX packages not in the allowlist: {outside}")
+        return list(dict.fromkeys(v))
 
 
 class Audience(BaseModel):
@@ -414,6 +427,15 @@ class AnimationPlan(BaseModel):
             for e in self.provenance.equations:
                 lines.append(f"- `{e.label}`: `{e.latex}`")
             lines.append("")
+        if self.provenance.packages or self.provenance.macros:
+            n = len(parse_macro_definitions(self.provenance.macros).definitions)
+            lines += [
+                "## Source preamble",
+                "",
+                f"- Packages: {', '.join(self.provenance.packages) or 'none'}",
+                f"- {n} macro definition{'' if n == 1 else 's'} from the source",
+                "",
+            ]
         if self.symbol_ledger:
             lines += ["## Symbol ledger", "", "| symbol | meaning | color |", "| --- | --- | --- |"]
             for s in self.symbol_ledger:

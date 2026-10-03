@@ -37,9 +37,29 @@ from manim_engineer.core.models import (
     TierReport,
     TransformSpec,
 )
+from manim_engineer.core.preamble import (
+    TEX_PACKAGE_ALLOWLIST,
+    DroppedDefinition,
+    MacroDefinition,
+    MacroScan,
+    PackageScan,
+    parse_macro_definitions,
+    parse_tex_packages,
+    select_definitions,
+    source_preamble_tex,
+)
 
 __all__ = [
     "SCHEMA_VERSION",
+    "TEX_PACKAGE_ALLOWLIST",
+    "DroppedDefinition",
+    "MacroDefinition",
+    "MacroScan",
+    "PackageScan",
+    "parse_macro_definitions",
+    "parse_tex_packages",
+    "select_definitions",
+    "source_preamble_tex",
     "AnimationPlan",
     "Archetype",
     "ArchetypeChoice",
