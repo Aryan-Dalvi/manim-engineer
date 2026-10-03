@@ -245,12 +245,21 @@ def run_cases(cases_dir, out, only, tiers, constraints, **kw):
 
 @main.command()
 def doctor():
-    """Check tools: manim, ffmpeg, latex, backends."""
+    """Check tools: manim, ffmpeg, latex and the allowlisted TeX packages, backends."""
     import manim
+
+    from manim_engineer.core import TEX_PACKAGE_ALLOWLIST
+    from manim_engineer.kit import installed_tex_packages
 
     rows = [("manim", manim.__version__), ("python", sys.version.split()[0])]
     for tool in ("ffmpeg", "ffprobe", "latex", "dvisvgm", "claude", "node"):
         rows.append((tool, shutil.which(tool) or "missing"))
+    # a paper that loads a missing one gets equations that cannot compile here
+    installed = set(installed_tex_packages())
+    for pkg in sorted(TEX_PACKAGE_ALLOWLIST):
+        rows.append(
+            (f"tex {pkg}.sty", "ok" if pkg in installed else f"missing (tlmgr install {pkg})")
+        )
     try:
         import faster_whisper  # noqa: F401
 
