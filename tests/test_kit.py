@@ -1,5 +1,8 @@
 import pytest
+from manim import MathTex, TexTemplate, config, tempconfig
 
+import manim_engineer.kit.preamble as kit_preamble
+from manim_engineer.core import TEX_PACKAGE_ALLOWLIST
 from manim_engineer.kit import (
     SAFE_X,
     SAFE_Y,
@@ -10,12 +13,15 @@ from manim_engineer.kit import (
     Timeline,
     bullet_list,
     caption,
+    installed_tex_packages,
     label_for,
     labeled_box,
     plot_in_region,
     safe_multiline,
     safe_text,
     section_title,
+    source_tex_template,
+    use_source_preamble,
     wrap_text,
 )
 
@@ -133,3 +139,51 @@ def test_cell_grid_permute_targets_original_slots():
             assert abs(target[0] - g.cell(r, c ^ r).get_center()[0]) < 1e-6
     assert len(g.highlight([(0, 0), (3, 7)])) == 2
     assert g.permute({(0, 0): (0, 0)}) == []
+
+
+def _tex_config(tmp_path) -> dict:
+    return {"media_dir": str(tmp_path), "tex_dir": str(tmp_path / "Tex"), "verbosity": "ERROR"}
+
+
+def test_source_template_adds_installed_packages_and_safe_definitions(monkeypatch):
+    monkeypatch.setattr(kit_preamble, "_kpsewhich", lambda names: frozenset({"mathtools"}) & names)
+    template = source_tex_template(
+        packages=["mathtools", "bm"],
+        definitions=[
+            r"\newcommand{\KL}{D_{\mathrm{KL}}}",
+            r"\newcommand{\secret}{\input{/etc/passwd}}",
+        ],
+    )
+    # bm is not installed in this fake, and \secret reads a file: both are left out
+    assert template.preamble == (
+        TexTemplate().preamble
+        + "\n\\usepackage{mathtools}\n\\providecommand{\\KL}{}\\renewcommand{\\KL}{D_{\\mathrm{KL}}}"
+    )
+
+
+def test_use_source_preamble_applies_until_the_config_is_reset(tmp_path):
+    with tempconfig(_tex_config(tmp_path)):
+        use_source_preamble(definitions=[r"\newcommand{\KL}{D_{\mathrm{KL}}}"])
+        MathTex(r"\KL(p \| q)")  # compiles only with the paper's definition
+    assert config.tex_template.preamble == TexTemplate().preamble
+
+
+def test_safe_forms_compile_where_the_source_forms_fail(tmp_path):
+    # each of these stops a plain preamble: \vec and \det exist, \nothere does not
+    definitions = [
+        r"\newcommand{\vec}[1]{\mathbf{#1}}",
+        r"\renewcommand{\nothere}{y}",
+        r"\DeclareMathOperator{\det}{Det}",
+    ]
+    with tempconfig(_tex_config(tmp_path)):
+        use_source_preamble(definitions=definitions)
+        MathTex(r"\vec{x} + \det A + \nothere")
+
+
+@pytest.mark.parametrize("package", sorted(TEX_PACKAGE_ALLOWLIST))
+def test_every_allowlisted_package_compiles_with_manims_template(tmp_path, package):
+    if package not in installed_tex_packages([package]):
+        pytest.skip(f"{package}.sty is not installed here")
+    with tempconfig(_tex_config(tmp_path)):
+        use_source_preamble(packages=[package])
+        MathTex(r"x^2 + y^2 = z^2")

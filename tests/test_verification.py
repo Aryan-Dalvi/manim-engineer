@@ -2,6 +2,7 @@ import ast
 from pathlib import Path
 
 import pytest
+from manim import TexTemplate, config
 
 from manim_engineer.core import (
     AnimationPlan,
@@ -145,6 +146,27 @@ def test_probe_runtime_error_is_condensed_and_categorized():
     assert res["ok"] is False and res["category"] == "api"
     assert "shift_right" in res["error"] and res["line"] == 9
     assert res["user_frames"] and "shift_right" in res["user_frames"][-1]["source"]
+
+
+def test_inline_probe_applies_a_scene_header_and_leaves_the_caller_alone(tmp_path: Path):
+    header = (
+        "from manim_engineer.kit import *\n\n"
+        'use_source_preamble(definitions=[r"\\newcommand{\\KL}{D_{\\mathrm{KL}}}"])\n'
+    )
+    scene = tmp_path / "kl_scene.py"
+    scene.write_text(
+        header + "\n\nclass KlScene(Scene):\n"
+        "    def construct(self):\n"
+        '        self.add(MathTex(r"\\KL(p \\| q)"))\n'
+        "        self.wait(0.1)\n"
+    )
+    broken = tmp_path / "broken_scene.py"
+    broken.write_text(header + "\nraise ValueError('module fails after its header')\n")
+
+    assert run_probe_inline(scene, "KlScene")["ok"]
+    assert config.tex_template.preamble == TexTemplate().preamble
+    assert not run_probe_inline(broken, "KlScene")["ok"]
+    assert config.tex_template.preamble == TexTemplate().preamble
 
 
 @pytest.mark.integration
