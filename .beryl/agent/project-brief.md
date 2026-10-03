@@ -43,6 +43,7 @@ recorded transcript, slides, YouTube, audio, or manuscript**.
 | yt-dlp, youtube-transcript-api | YouTube captions and audio | `ingest.youtube` | Captions fail → download audio → faster-whisper |
 | PyMuPDF, python-pptx | PDF and PPTX slides and manuscripts | `ingest.slides`, `ingest.manuscript` | Error with the failing page |
 | LaTeX (`latex`, `dvisvgm`) | Tier 0 precompile and Manim text rendering | `verification.static` | Finding category `latex` |
+| `kpsewhich` | Which allowlisted TeX packages this machine can load | `kit.preamble` | Package left out of the template; Tier 0 warning; listed by `doctor` |
 
 ## Definition Of Done
 
