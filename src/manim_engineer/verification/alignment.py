@@ -7,7 +7,7 @@ from difflib import SequenceMatcher
 
 from manim_engineer.core import AnimationPlan, Finding, Severity
 from manim_engineer.verification.probe import Keyframe
-from manim_engineer.verification.static import collect_tex_literals
+from manim_engineer.verification.static import collect_tex_literals, without_source_preamble
 
 WORDS_PER_SECOND = 2.5
 MIN_EQ_CHARS = 6
@@ -126,6 +126,8 @@ def check_equation_provenance(plan: AnimationPlan, code: str) -> list[Finding]:
     unsourced-equation sweep is skipped entirely.
     """
     out: list[Finding] = []
+    # the source-preamble header holds the paper's definitions, which are never drawn
+    code = without_source_preamble(code)
     code_n = _norm(code)
     sourced = [e for e in plan.provenance.equations if e.verbatim and e.latex]
 
