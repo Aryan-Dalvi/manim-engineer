@@ -510,6 +510,15 @@ def test_cli_help_lists_commands():
         assert cmd in res.output
 
 
+def test_doctor_lists_allowlisted_tex_packages_this_machine_lacks(monkeypatch):
+    import manim_engineer.kit.preamble as kit_preamble
+
+    monkeypatch.setattr(kit_preamble, "_kpsewhich", lambda names: names - {"physics"})
+    out = CliRunner().invoke(main, ["doctor"]).output
+    assert re.search(r"tex physics\.sty\s+missing \(tlmgr install physics\)", out)
+    assert re.search(r"tex mathtools\.sty\s+ok", out)
+
+
 def test_approve_pins_the_plan_and_accepted_code(tmp_path: Path):
     run = tmp_path / "run"
     _accepted_run(run)
