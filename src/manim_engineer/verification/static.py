@@ -412,13 +412,16 @@ def estimate_duration(tree: ast.Module) -> float:
     return total
 
 
-_TEX_CALLS = {"MathTex", "Tex", "Title", "BulletedList", "SingleStringMathTex"}
-_TEX_TEMPLATE = r"""\documentclass[preview]{standalone}
-\usepackage[english]{babel}\usepackage{amsmath}\usepackage{amssymb}\usepackage{dsfont}\usepackage{setspace}\usepackage{relsize}\usepackage{ragged2e}\usepackage{physics}\usepackage{xcolor}\usepackage{textcomp}\usepackage{microtype}
-\begin{document}
-%s
-\end{document}
-"""
+# The environment and argument separator each Manim TeX class compiles with by default.
+_TEX_DEFAULTS: dict[str, tuple[str | None, str | None]] = {
+    "MathTex": ("align*", " "),
+    "SingleStringMathTex": ("align*", None),  # one string, never split into parts
+    "Tex": ("center", ""),
+    "Title": ("center", ""),
+    "BulletedList": (None, ""),
+}
+_TEX_CALLS = set(_TEX_DEFAULTS)
+_UNKNOWN = object()
 
 
 def collect_tex_literals(tree: ast.Module) -> list[tuple[int, str, str]]:
@@ -435,9 +438,107 @@ def collect_tex_literals(tree: ast.Module) -> list[tuple[int, str, str]]:
     return out
 
 
+def _keyword(node: ast.Call, name: str, default: object) -> object:
+    for kw in node.keywords:
+        if kw.arg == name:
+            try:
+                return ast.literal_eval(kw.value)
+            except (ValueError, TypeError, SyntaxError):
+                return _UNKNOWN
+    return default
+
+
+def _tex_parts(strings: list[str], isolate: list[str]) -> list[str]:
+    """MathTex._break_up_tex_strings: {{ }} groups and isolated substrings become parts."""
+    pieces = [p for s in strings for p in re.split("{{(.*?)}}", s)]
+    if isolate:
+        pattern = "|".join(f"({re.escape(s)})" for s in isolate)
+        pieces = [p for s in pieces for p in re.split(pattern, s)]
+    return [p for p in pieces if p]
+
+
+def tex_compile_jobs(tree: ast.Module) -> list[tuple[int, str, str, str | None]]:
+    """(line, class, expression, environment) for every document Manim typesets for a TeX call.
+
+    MathTex typesets the joined string and then each part on its own, so Tier 0 does
+    too. A call that brings its own tex_template, or computes its environment,
+    separator or isolated substrings at runtime, is left to the Tier 1 probe.
+    """
+    jobs: list[tuple[int, str, str, str | None]] = []
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in _TEX_DEFAULTS
+        ):
+            continue
+        if any(kw.arg == "tex_template" for kw in node.keywords):
+            continue
+        kind = node.func.id
+        env_default, sep_default = _TEX_DEFAULTS[kind]
+        env = _keyword(node, "tex_environment", env_default)
+        sep = _keyword(node, "arg_separator", sep_default)
+        isolate = _keyword(node, "substrings_to_isolate", None) or []
+        color_map = _keyword(node, "tex_to_color_map", None) or {}
+        if not (
+            (env is None or isinstance(env, str))
+            and (sep is None or isinstance(sep, str))
+            and isinstance(isolate, list | tuple)
+            and isinstance(color_map, dict)
+            and all(isinstance(s, str) for s in [*isolate, *color_map])
+        ):
+            continue
+        strings = [
+            a.value for a in node.args if isinstance(a, ast.Constant) and isinstance(a.value, str)
+        ]
+        if not strings:
+            continue
+        if kind == "BulletedList":
+            strings = [s + "\\\\" for s in strings]
+        if sep is None:
+            exprs = strings[:1]
+        else:
+            parts = _tex_parts(strings, [*isolate, *color_map])
+            joined = [sep.join(parts)] if len(strings) == len(node.args) else []
+            exprs = joined + parts
+        jobs += [(node.lineno, kind, e, env) for e in exprs if e.strip()]
+    return jobs
+
+
+def _as_manim_typesets(expression: str) -> str:
+    # Manim rewrites every string before compiling it (closes stray braces, balances
+    # \left/\right, pads a trailing ^ or _). The rewrite reads no instance state, so an
+    # uninitialised mobject runs Manim's own code and Tier 0 cannot drift from it.
+    from manim import SingleStringMathTex
+
+    return SingleStringMathTex.__new__(SingleStringMathTex)._get_modified_expression(expression)
+
+
+def _compile_tex(
+    template, expression: str, environment: str | None, workdir: Path, timeout: int
+) -> str | None:
+    """Typeset one expression the way Manim does: None if it compiles, else the TeX error."""
+    from manim.utils.tex_file_writing import make_tex_compilation_command
+
+    if environment:
+        source = template.get_texcode_for_expression_in_env(expression, environment)
+    else:
+        source = template.get_texcode_for_expression(expression)
+    tex = workdir / "t.tex"
+    tex.write_text(source, encoding="utf-8")
+    cmd = make_tex_compilation_command(template.tex_compiler, template.output_format, tex, workdir)
+    cp = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    if cp.returncode == 0:
+        return None
+    log_path = workdir / "t.log"
+    log = log_path.read_text(errors="ignore") if log_path.exists() else cp.stdout
+    errs = [ln for ln in log.splitlines() if ln.startswith("!")][:2]
+    return " | ".join(errs) or f"{template.tex_compiler} exited {cp.returncode}"
+
+
 def check_latex(tree: ast.Module, timeout: int = 40) -> list[Finding]:
-    lits = collect_tex_literals(tree)
-    if not lits:
+    jobs = tex_compile_jobs(tree)
+    if not jobs:
         return []
     import shutil
 
@@ -451,52 +552,38 @@ def check_latex(tree: ast.Module, timeout: int = 40) -> list[Finding]:
                 fix="",
             )
         ]
+    from manim import TexTemplate
+
+    template = TexTemplate()
     out: list[Finding] = []
-    seen: set[str] = set()
+    seen: set[tuple[str, str | None]] = set()
     with tempfile.TemporaryDirectory() as d:
-        for lineno, kind, s in lits:
-            body = f"$\\displaystyle {s}$" if kind in ("MathTex", "SingleStringMathTex") else s
-            if body in seen:
+        for lineno, kind, expression, environment in jobs:
+            body = _as_manim_typesets(expression)
+            if (body, environment) in seen:
                 continue
-            seen.add(body)
-            f = Path(d) / "t.tex"
-            f.write_text(_TEX_TEMPLATE % body)
+            seen.add((body, environment))
             try:
-                cp = subprocess.run(
-                    [
-                        "latex",
-                        "-interaction=nonstopmode",
-                        "-halt-on-error",
-                        "-output-directory",
-                        d,
-                        str(f),
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout,
-                )
+                err = _compile_tex(template, body, environment, Path(d), timeout)
             except subprocess.TimeoutExpired:
                 out.append(
                     Finding(
                         gate="latex",
                         severity=Severity.FATAL,
                         line=lineno,
-                        message=f"{kind}({s!r}) LaTeX timed out",
+                        message=f"{kind}({expression!r}) LaTeX timed out",
                         fix="Simplify the expression.",
                     )
                 )
                 continue
-            if cp.returncode != 0:
-                log_path = Path(d) / "t.log"
-                log = log_path.read_text(errors="ignore") if log_path.exists() else cp.stdout
-                errs = [ln for ln in log.splitlines() if ln.startswith("!")][:2]
+            if err is not None:
                 out.append(
                     Finding(
                         gate="latex",
                         severity=Severity.FATAL,
                         line=lineno,
-                        message=f"{kind}({s!r}) does not compile: {' | '.join(errs)}",
-                        fix="Fix the TeX (balance braces, escape %, use raw strings) or use Text() for plain words.",
+                        message=f"{kind}({expression!r}) does not compile: {err}",
+                        fix="Fix the TeX: use only commands Manim's preamble defines (amsmath, amssymb), escape %, use raw strings; use Text() for plain words.",
                     )
                 )
     return out
