@@ -255,3 +255,18 @@ def test_source_equations_outrank_model_equations_in_provenance():
     # the planner prompt names the source label so the model can refer to it
     plan_req = next(r for r in planner.backend.requests if r.tag.startswith("plan"))
     assert "eq:attn:" in plan_req.prompt
+
+
+def test_plan_carries_the_source_preamble():
+    tex = LEDGER_TEX.replace(
+        "\\documentclass{article}", "\\documentclass{article}\n\\usepackage{bm,hyperref}"
+    )
+    doc = document_from_latex(tex, source="https://arxiv.org/abs/1706.03762")
+    # a document.json from before the allowlist, or edited by hand
+    doc.meta["tex_packages"].append("shellesc")
+    bucket = Bucket(bucket_id="k000", segments=list(doc.segments), closed=True)
+    planner = Planner(_fake_backend(), PlannerConfig())
+    plan = planner.plan(bucket, doc, planner.triage(bucket, doc))
+
+    assert plan.provenance.packages == ["bm"]
+    assert r"\newcommand{\sm}{\mathrm{softmax}}" in plan.provenance.macros
