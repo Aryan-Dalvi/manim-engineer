@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-17)
+Accepted (2026-09-17). The deck-scope bullet is superseded by ADR 0009.
 
 ## Context
 

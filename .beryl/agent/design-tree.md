@@ -34,7 +34,8 @@ gallery, and revisions flow back through the plan.
 | Source fidelity severity | Blocks when the plan carries verbatim source equations; advisory otherwise | 2026-09-17 | 0007 |
 | Paper equations | Read from LaTeX source into an equation ledger; never re-typed by a model | 2026-09-17 | 0007 |
 | Presenter deck | Reveal.js 6.0.2 vendored, one slide per beat clip, narration as notes; no manim-slides | 2026-09-17 | 0008 |
-| Deck scope | Accepted and needs_human concepts, the latter marked "needs review" | 2026-09-17 | 0008 |
+| Deck scope | Concepts whose approval pin holds; no "needs review" badge | 2026-09-17 | 0009 |
+| Approval pins | SHA-256 of canonical plan JSON and accepted scene code in `review/approvals.json`; `run` keeps held pins and revokes broken ones with a reason | 2026-09-17 | 0009 |
 
 ## Pressure Points
 
@@ -50,6 +51,8 @@ gallery, and revisions flow back through the plan.
 - Decks are built from section clips rather than manim-slides (generated scenes subclass `Scene`, not `Slide`): python-pptx for PPTX and vendored Reveal.js for HTML. Upgrading Reveal.js means replacing all vendored files together.
 - The fidelity gate's resemblance threshold (0.82) separates "altered source equation" (fatal) from "not in the source" (warn). It is uncalibrated: no corpus run has exercised it yet, and a paper whose prose restates a formula in a slightly different form is the likely first false positive.
 - `Provenance.macros` carries a paper's `\newcommand` definitions into the plan, but nothing injects them into the render's `TexTemplate` yet, so an equation depending on a paper macro passes the fidelity gate and then fails to compile.
+- Approved concepts are still re-planned on every `run` because concept ids come from the planner: one plan call each per re-run, and a near-duplicate under a new id is rendered again. Follow-up: pass approved concept names into triage so planning can skip them.
+- `revise_run` bumps and saves the plan even when the revision fails, so `approve` refuses the animation it kept until that concept is re-rendered.
 
 ## Recording Rule (Design Tree vs ADR)
 
