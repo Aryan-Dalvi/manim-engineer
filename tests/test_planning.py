@@ -1,7 +1,8 @@
 from manim_engineer.core import Document, Modality, Segment, SegmentKind, SourceSpan
-from manim_engineer.ingest import document_from_markdown
+from manim_engineer.ingest import document_from_latex, document_from_markdown
 from manim_engineer.llm import FakeBackend, LLMRequest
 from manim_engineer.planning import (
+    Bucket,
     Bucketer,
     LiveReplay,
     MaturityConfig,
@@ -213,3 +214,44 @@ def test_live_replay_processes_each_segment_once_and_emits_plan():
 def test_slugify():
     assert slugify("Why attention divides by √d_k") == "why_attention_divides_by_d_k"
     assert slugify("123 go") == "c_123_go"
+
+
+LEDGER_TEX = r"""
+\documentclass{article}
+\newcommand{\sm}{\mathrm{softmax}}
+\title{Attention}
+\begin{document}
+\section{Scaled dot product attention}
+
+The attention score is the dot product of the query and the key vectors, scaled by the
+square root of the key dimension, and softmax over those scores gives the weights that
+multiply the value vectors.
+
+\begin{equation}\label{eq:attn}
+\mathrm{Attention}(Q,K,V) = \mathrm{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V
+\end{equation}
+
+\end{document}
+"""
+
+
+def test_source_equations_outrank_model_equations_in_provenance():
+    doc = document_from_latex(LEDGER_TEX, source="https://arxiv.org/abs/1706.03762")
+    bucket = Bucket(bucket_id="k000", segments=list(doc.segments), closed=True)
+    planner = Planner(_fake_backend(), PlannerConfig())
+    plan = planner.plan(bucket, doc, planner.triage(bucket, doc))
+
+    eqs = plan.provenance.equations
+    # the paper's own equation is carried verbatim and takes the first slot
+    assert eqs[0].verbatim is True
+    assert eqs[0].label == "eq:attn"
+    assert eqs[0].para_id == "sec1.eq1"
+    assert eqs[0].env == "equation"
+    assert r"\sqrt{d_k}" in eqs[0].latex
+    # whatever the model re-typed is kept, but marked unsourced rather than winning
+    assert [e.verbatim for e in eqs] == [True, False]
+    assert eqs[1].label == "attn"
+    assert plan.provenance.macros.startswith(r"\newcommand")
+    # the planner prompt names the source label so the model can refer to it
+    plan_req = next(r for r in planner.backend.requests if r.tag.startswith("plan"))
+    assert "eq:attn:" in plan_req.prompt

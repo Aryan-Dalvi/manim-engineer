@@ -1,4 +1,5 @@
 import json
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -6,9 +7,12 @@ import pytest
 from manim_engineer.core import Modality, SegmentKind
 from manim_engineer.ingest import (
     Cue,
+    arxiv_id,
     detect_kind,
+    document_from_latex,
     document_from_markdown,
     ingest,
+    is_arxiv,
     load_audio,
     load_document,
     load_pdf_deck,
@@ -183,3 +187,110 @@ def test_youtube_captions_then_audio_fallback(tmp_path: Path):
     )
     assert doc2.meta["path"] == "audio+asr" and "blocked" in doc2.meta["captions_error"]
     assert doc2.segments[0].text == "fallback works."
+
+
+TEX = r"""
+\documentclass{article}
+\newcommand{\sm}{\mathrm{softmax}}
+\DeclareMathOperator{\KL}{KL}
+\title{Speculative Decoding}
+\begin{document}
+
+\section{Method}
+
+The draft model proposes tokens and the target model \emph{verifies} them~\cite{leviathan2023}.
+
+\begin{equation}\label{eq:accept}
+\alpha = \min\left(1, \frac{p(x)}{q(x)}\right)
+\end{equation}
+
+Acceptance is cheap to evaluate.
+
+\section{Results}
+
+\[
+\mathbb{E}[N] = \frac{1 - \alpha^{k+1}}{1 - \alpha}
+\]
+
+\end{document}
+"""
+
+
+def test_latex_yields_sections_equation_ledger_and_macros():
+    doc = document_from_latex(
+        TEX, source="https://arxiv.org/abs/2211.17192", arxiv_id_="2211.17192"
+    )
+    assert doc.title == "Speculative Decoding"
+    assert [s.kind for s in doc.segments] == [
+        SegmentKind.HEADING,
+        SegmentKind.BODY,
+        SegmentKind.EQUATION,
+        SegmentKind.BODY,
+        SegmentKind.HEADING,
+        SegmentKind.EQUATION,
+    ]
+    eqs = doc.equations()
+    # equations are carried verbatim, minus \label, so the plan never re-types them
+    assert eqs[0].latex == r"\alpha = \min\left(1, \frac{p(x)}{q(x)}\right)"
+    assert eqs[0].span.para_id == "sec1.eq1"
+    # equation numbering is document-global while paragraph numbering resets per
+    # section, matching document_from_markdown; do not "fix" this to sec2.eq1
+    assert eqs[1].span.para_id == "sec2.eq2"
+    ledger = doc.meta["equation_ledger"]
+    assert [e["label"] for e in ledger] == ["eq:accept", "sec2.eq2"]
+    assert ledger[0]["env"] == "equation" and ledger[1]["env"] == "display"
+    assert doc.meta["has_equation_ledger"] is True
+    assert r"\sm" in doc.meta["macros"] and r"\KL" in doc.meta["macros"]
+    # prose is readable: markup expanded, citations dropped
+    assert "verifies" in doc.segments[1].text and "leviathan2023" not in doc.segments[1].text
+
+
+def test_arxiv_id_forms_and_detection(tmp_path: Path, monkeypatch):
+    assert arxiv_id("2211.17192") == "2211.17192"
+    assert arxiv_id("arXiv:2211.17192v2") == "2211.17192v2"
+    assert arxiv_id("https://arxiv.org/abs/2211.17192") == "2211.17192"
+    assert arxiv_id("https://arxiv.org/pdf/2211.17192v3") == "2211.17192v3"
+    assert is_arxiv("2211.17192") and not is_arxiv("notes.md")
+    with pytest.raises(ValueError):
+        arxiv_id("https://example.com/paper")
+    assert detect_kind("arXiv:2211.17192") == "arxiv"
+    # an existing local file must never be mistaken for a paper id and fetched
+    monkeypatch.chdir(tmp_path)
+    Path("2211.17192").write_text("local")
+    with pytest.raises(ValueError):
+        detect_kind("2211.17192")
+
+
+def test_arxiv_ingest_flattens_inputs_with_injected_fetch(tmp_path: Path):
+    src = tmp_path / "paper"
+    src.mkdir()
+    (src / "main.tex").write_text(
+        "\\documentclass{article}\n"
+        "\\newcommand{\\sm}{\\mathrm{softmax}}\n"
+        "\\title{Draft and Verify}\n"
+        "\\begin{document}\n"
+        "\\section{Method}\n\n"
+        "% a comment that must not survive\n"
+        "Draft then verify.\n\n"
+        "\\input{accept}\n\n"
+        "\\end{document}\n"
+    )
+    (src / "accept.tex").write_text(
+        "\\begin{equation}\\label{eq:acc}\n\\alpha = \\min(1, p/q)\n\\end{equation}\n"
+    )
+    archive = tmp_path / "src.tar.gz"
+    with tarfile.open(archive, "w:gz") as tf:
+        for f in sorted(src.iterdir()):
+            tf.add(f, arcname=f.name)
+
+    doc = ingest("arXiv:2211.17192", workdir=tmp_path / "wd", fetch=lambda aid, wd: archive)
+    assert doc.modality == Modality.MANUSCRIPT
+    assert doc.title == "Draft and Verify"
+    assert doc.meta["arxiv_id"] == "2211.17192"
+    assert "comment that must not survive" not in doc.text
+    eqs = doc.equations()
+    assert len(eqs) == 1 and r"\alpha" in (eqs[0].latex or "")
+    assert doc.meta["equation_ledger"][0]["label"] == "eq:acc"
+    assert r"\sm" in doc.meta["macros"]
+    save_document(doc, tmp_path / "doc.json")
+    assert load_document(tmp_path / "doc.json") == doc

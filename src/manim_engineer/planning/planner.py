@@ -75,6 +75,58 @@ def _beat_id(raw: str, n: int) -> str:
     return f"b{n}_{slugify(raw, 30) or 'beat'}"
 
 
+def _ledger_index(doc: Document) -> dict[str, dict]:
+    """para_id -> ledger entry, for documents ingested with an equation ledger."""
+    return {
+        str(e.get("para_id", "")): e
+        for e in (doc.meta.get("equation_ledger") or [])
+        if e.get("para_id")
+    }
+
+
+def _eq_label(para_id: str, seg_id: str, ledger: dict[str, dict]) -> str:
+    entry = ledger.get(para_id)
+    if entry and entry.get("label"):
+        return str(entry["label"])
+    return para_id or seg_id
+
+
+def _norm_latex(s: str) -> str:
+    return "".join(s.split())
+
+
+def _equations(data: dict, eq_segs, ledger: dict[str, dict]) -> list[Equation]:
+    """Source equations outrank anything the model re-typed.
+
+    An equation the model produced that the source also contains would otherwise
+    replace the verbatim one, which is the accuracy risk this ordering removes.
+    """
+    out: list[Equation] = []
+    seen: set[str] = set()
+    for s in eq_segs:
+        if not s.latex:
+            continue
+        pid = s.span.para_id or ""
+        entry = ledger.get(pid) or {}
+        out.append(
+            Equation(
+                label=_eq_label(pid, s.seg_id, ledger),
+                latex=s.latex,
+                para_id=pid,
+                env=str(entry.get("env", "")),
+                verbatim=True,
+            )
+        )
+        seen.add(_norm_latex(s.latex))
+    for i, e in enumerate(data.get("equations") or []):
+        latex = str(e.get("latex") or "")
+        if not latex or _norm_latex(latex) in seen:
+            continue
+        out.append(Equation(label=str(e.get("label") or f"eq{i + 1}"), latex=latex))
+        seen.add(_norm_latex(latex))
+    return out
+
+
 class Planner:
     def __init__(self, backend: LLMBackend, config: PlannerConfig | None = None):
         self.backend = backend
@@ -113,7 +165,12 @@ class Planner:
         extra_constraints: list[str] | None = None,
     ) -> AnimationPlan:
         eq_segs = [s for s in bucket.segments if s.kind == SegmentKind.EQUATION and s.latex]
-        equations = [s.latex for s in eq_segs if s.latex]
+        ledger = _ledger_index(doc)
+        equations = [
+            f"{_eq_label(s.span.para_id or '', s.seg_id, ledger)}: {s.latex}"
+            for s in eq_segs
+            if s.latex
+        ]
         for ce in doc.meta.get("companion_equations", []) or []:
             if ce.get("latex"):
                 equations.append(f"{ce['latex']}   (companion: {ce.get('source', '')})")
@@ -179,13 +236,9 @@ class Planner:
         provenance = Provenance(
             source_spans=[s.span for s in bucket.segments if s.kind != SegmentKind.HEADING][:12],
             quotes=[q for q in (data.get("quotes") or []) if isinstance(q, str)][:3],
-            equations=[
-                Equation(label=e.get("label", f"eq{i + 1}"), latex=e.get("latex", ""))
-                for i, e in enumerate(data.get("equations") or [])
-                if e.get("latex")
-            ]
-            or [Equation(label=f"eq{i + 1}", latex=s.latex or "") for i, s in enumerate(eq_segs)],
+            equations=_equations(data, eq_segs, _ledger_index(doc)),
             segment_ids=[s.seg_id for s in bucket.segments],
+            macros=str(doc.meta.get("macros", "")),
         )
         level = data.get("audience_level") or self.cfg.audience
         if level not in {a.value for a in AudienceLevel}:

@@ -13,7 +13,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
 
 # --------------------------------------------------------------------------- enums
 
@@ -180,6 +180,11 @@ class Concept(BaseModel):
 class Equation(BaseModel):
     label: str
     latex: str
+    para_id: str = ""
+    env: str = ""
+    # True only when read from the source document. The fidelity gate blocks on
+    # these and stays advisory for equations the model supplied itself.
+    verbatim: bool = False
 
 
 class Provenance(BaseModel):
@@ -187,6 +192,7 @@ class Provenance(BaseModel):
     quotes: list[str] = Field(default_factory=list)
     equations: list[Equation] = Field(default_factory=list)
     segment_ids: list[str] = Field(default_factory=list)
+    macros: str = ""  # source \newcommand definitions the equations depend on
 
 
 class Audience(BaseModel):

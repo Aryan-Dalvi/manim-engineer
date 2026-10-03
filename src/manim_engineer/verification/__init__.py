@@ -102,6 +102,7 @@ __all__ = [
     "check_alignment",
     "check_all",
     "check_budget",
+    "check_equation_provenance",
     "contact_sheet",
     "critique",
     "extract_section_frames",

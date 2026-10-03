@@ -7,6 +7,8 @@
 | Source Span | `SourceSpan` | Where a piece of content came from: modality, document id, and exactly one of time range, slide index, or paragraph id | Exactly one locator group populated | `Ref`, `Pointer` |
 | Segment | `Segment` | One unit of normalized input text with a `SourceSpan`, a kind (speech, slide text, notes, body, equation, code) | Every adapter emits only Segments | `Chunk` (reserved for planner windows) |
 | Document | `Document` | The normalized result of ingesting one input: segments plus assets and metadata | Immutable after ingestion | `Transcript` (only one modality) |
+| Equation Ledger | `Document.meta["equation_ledger"]` | Display equations extracted from a source document with their label, `para_id` and environment | Only adapters that read real source markup produce one | `Formula list` |
+| Verbatim Equation | `Equation.verbatim` | An equation carried from the source document rather than written by a model | The fidelity gate blocks only on these | `Quoted equation` |
 | Bucket | `Bucket` | A growing set of segments believed to describe one concept | Mutable; bounded; owned by planning | `Cluster` |
 | Maturity | `mature(bucket)` | Scored predicate deciding a bucket has enough concrete content to plan | Combines mass, cohesion, boundary, archetype confidence, concreteness, staleness, dedup | Single threshold |
 | Concept | `concept_id` | A stable slug for one animatable idea | Deduplicated by fingerprint | `Topic` |
