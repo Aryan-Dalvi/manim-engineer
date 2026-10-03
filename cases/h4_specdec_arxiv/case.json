@@ -1,0 +1,9 @@
+{
+ "tier": "hard",
+ "source": "https://arxiv.org/abs/2603.03251",
+ "note": "The h3 paper (Speculative Speculative Decoding) read from its LaTeX source instead of its PDF: 54 verbatim source equations, 39 with & alignment and six that need mathtools. Exercises the source preamble (ADR 0010) and the fidelity gate (ADR 0007) on real paper input.",
+ "config": {
+  "max_plans": 3,
+  "audience": "grad"
+ }
+}
