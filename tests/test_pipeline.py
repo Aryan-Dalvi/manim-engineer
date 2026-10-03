@@ -265,6 +265,152 @@ def test_run_pipeline_end_to_end_with_fake_backend(tmp_path: Path, monkeypatch):
     assert plan.meta.revision == 1 and plan.meta.revision_notes == ["change the caption"]
 
 
+PAPER_TEX = r"""\documentclass{article}
+\usepackage{amsmath,mathtools}
+\usepackage{hyperref}
+\newcommand{\KL}[2]{
+  D_{\mathrm{KL}}(#1 \| #2)
+}
+\title{Draft and verify}
+\begin{document}
+\section{Acceptance}
+
+The verifier accepts a drafted token with probability equal to the ratio of the target
+probability to the draft probability, capped at one. When the draft distribution drifts
+away from the target distribution the ratio falls, so the expected number of accepted
+tokens per step falls with the divergence between the two distributions.
+
+\begin{eqnarray*}
+\alpha &\coloneqq& \min\left(1, \frac{p(x)}{q(x)}\right)
+\end{eqnarray*}
+
+\begin{equation}
+\KL{p}{q} = \sum_x p(x) \log \frac{p(x)}{q(x)}
+\end{equation}
+
+\end{document}
+"""
+
+# what a model writes: the source equations verbatim, and no preamble of its own
+PAPER_SCENE = """from manim_engineer.kit import *
+
+
+class DraftAcceptanceScene(Scene):
+    def construct(self):
+        self.next_section("b1_accept")
+        title = section_title("Draft acceptance")
+        accept = MathTex(r"{accept}", font_size=EQ_SIZE)
+        fit_to_region(accept, "main_upper")
+        self.play(Write(title), run_time=1.0)
+        self.play(Write(accept), run_time=1.2)
+        self.wait(1.0)
+        self.next_section("b2_divergence")
+        self.play(FadeOut(accept), run_time=0.6)
+        kl = MathTex(r"{kl}", font_size=EQ_SIZE)
+        fit_to_region(kl, "main_upper")
+        self.play(Write(kl), run_time=1.2)
+        self.wait(1.5)
+        fade_all(self)
+""".format(
+    accept=r"\alpha &\coloneqq& \min\left(1, \frac{p(x)}{q(x)}\right)",
+    kl=r"\KL{p}{q} = \sum_x p(x) \log \frac{p(x)}{q(x)}",
+)
+
+
+def _paper_backend() -> FakeBackend:
+    def default(req: LLMRequest):
+        if req.tag.startswith("triage"):
+            return {
+                "worth_animating": True,
+                "salience": 5,
+                "concept_name": "Draft acceptance",
+                "reason": "the acceptance rule",
+                "archetype": "equation_derivation",
+                "has_equation": True,
+                "difficulty": "medium",
+            }
+        if req.tag.startswith("plan"):
+            return {
+                "concept_id": "draft_acceptance",
+                "title": "Draft acceptance",
+                "one_line": "A draft token survives with probability min(1, p/q).",
+                "claim": "Acceptance falls as the draft drifts from the target.",
+                "audience_level": "grad",
+                "archetype": "equation_derivation",
+                "archetype_confidence": 0.9,
+                "target_duration_s": 10,
+                "beats": [
+                    {
+                        "beat_id": "b1_accept",
+                        "purpose": "show the acceptance rule",
+                        "narration": "A draft token is accepted with this probability.",
+                        "duration_s": 3,
+                        "wait_after_s": 1,
+                    },
+                    {
+                        "beat_id": "b2_divergence",
+                        "purpose": "relate it to the divergence",
+                        "narration": "Acceptance falls as the divergence grows.",
+                        "duration_s": 3,
+                        "wait_after_s": 1.5,
+                    },
+                ],
+                "priority": 0.9,
+            }
+        if req.tag.startswith(("codegen", "repair", "revise", "visual_repair")):
+            return "```python\n" + PAPER_SCENE + "\n```"
+        if req.tag.startswith("critique"):
+            return {
+                "scores": {
+                    "visual_relevance": 4,
+                    "element_layout": 4,
+                    "logical_flow": 4,
+                    "clarity": 4,
+                    "plan_adherence": 4,
+                },
+                "issues": [],
+                "summary": "fine",
+            }
+        raise AssertionError(req.tag)
+
+    return FakeBackend(default=default)
+
+
+@pytest.mark.integration
+def test_paper_with_macros_and_packages_is_accepted_first_time(tmp_path: Path, monkeypatch):
+    import tarfile
+
+    import manim_engineer.ingest.arxiv as arxiv_mod
+    import manim_engineer.pipeline.run as runmod
+
+    (tmp_path / "main.tex").write_text(PAPER_TEX)
+    archive = tmp_path / "src.tar.gz"
+    with tarfile.open(archive, "w:gz") as tf:
+        tf.add(tmp_path / "main.tex", arcname="main.tex")
+    monkeypatch.setattr(arxiv_mod, "fetch_source", lambda aid, wd: archive)
+    monkeypatch.setattr(runmod, "select_backend", lambda *a, **k: _paper_backend())
+    cfg = RunConfig(
+        backend="fake",
+        quality="l",
+        workers=1,
+        gif_width=480,
+        gif_fps=10,
+        critique=True,
+        probe_pixel_height=480,
+    )
+    summary = run_pipeline("arXiv:2603.03251", tmp_path / "run", cfg, log=lambda *a: None)
+
+    c = summary["concepts"][0]
+    assert c["status"] == "accepted", c
+    assert [a["kind"] for a in c["attempts"]] == ["generate"] and not c["used_fallback"]
+    header = Path(c["accepted_code"]).read_text().split("class ")[0]
+    assert "'mathtools'" in header and r"D_{\mathrm{KL}}" in header
+    assert "hyperref" not in header
+    assert [s["name"] for s in c["bundle"]["sections"]] == ["b1_accept", "b2_divergence"]
+    manifest = json.loads(Path(c["bundle_dir"], "manifest.json").read_text())
+    assert all(Path(c["bundle_dir"], s["mp4"]).exists() for s in manifest["sections"])
+
+
 @pytest.mark.integration
 def test_repair_loop_fixes_hallucinated_api(tmp_path: Path):
     from manim_engineer.core import AnimationPlan

@@ -10,6 +10,7 @@ from manim_engineer.generation.codegen import (
     revise,
 )
 from manim_engineer.generation.knowledge_pack import guess_domain, knowledge_for, list_knowledge
+from manim_engineer.generation.preamble import apply_source_preamble
 from manim_engineer.generation.prompts import (
     codegen_prompt,
     findings_block,
@@ -22,6 +23,7 @@ from manim_engineer.generation.templates import fallback_scene
 __all__ = [
     "KIT_IMPORT",
     "GenerationResult",
+    "apply_source_preamble",
     "codegen_prompt",
     "extract_code",
     "fallback_scene",
