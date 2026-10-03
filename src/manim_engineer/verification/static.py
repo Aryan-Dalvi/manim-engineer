@@ -17,7 +17,7 @@ import tempfile
 from functools import lru_cache
 from pathlib import Path
 
-from manim_engineer.core import Finding, Severity
+from manim_engineer.core import TEX_PACKAGE_ALLOWLIST, Finding, Severity
 
 FORBIDDEN_IMPORTS = {
     "os",
@@ -531,14 +531,128 @@ def _compile_tex(
     if cp.returncode == 0:
         return None
     log_path = workdir / "t.log"
-    log = log_path.read_text(errors="ignore") if log_path.exists() else cp.stdout
-    errs = [ln for ln in log.splitlines() if ln.startswith("!")][:2]
-    return " | ".join(errs) or f"{template.tex_compiler} exited {cp.returncode}"
+    lines = (log_path.read_text(errors="ignore") if log_path.exists() else cp.stdout).splitlines()
+    bang = next((i for i, ln in enumerate(lines) if ln.startswith("!")), None)
+    if bang is None:
+        return f"{template.tex_compiler} exited {cp.returncode}"
+    # TeX's "l.<n> <text>" line shows where it stopped: the expression or the definition
+    where = next((ln.strip() for ln in lines[bang + 1 : bang + 12] if ln.startswith("l.")), "")
+    return " | ".join(part for part in (lines[bang], where) if part)
+
+
+_PREAMBLE_CALL = "use_source_preamble"
+
+
+def _is_preamble_call(node: ast.stmt) -> bool:
+    return (
+        isinstance(node, ast.Expr)
+        and isinstance(node.value, ast.Call)
+        and isinstance(node.value.func, ast.Name)
+        and node.value.func.id == _PREAMBLE_CALL
+    )
+
+
+def without_source_preamble(src: str) -> str:
+    """Scene code minus its generated use_source_preamble(...) call, which is never drawn."""
+    try:
+        tree = ast.parse(src)
+    except SyntaxError:
+        return src
+    lines = src.splitlines(keepends=True)
+    for node in reversed(tree.body):
+        if _is_preamble_call(node):
+            del lines[node.lineno - 1 : node.end_lineno]
+    return "".join(lines)
+
+
+def _read_preamble_call(call: ast.Call) -> tuple[list[str], list[str]] | None:
+    """(packages, definitions) from a header written with literal lists, else None."""
+    if len(call.args) > 2:
+        return None
+    values: dict[str, list[str]] = {"packages": [], "definitions": []}
+    named = [
+        *zip(("packages", "definitions"), call.args, strict=False),  # 0-2 positional
+        *((k.arg, k.value) for k in call.keywords),
+    ]
+    for name, node in named:
+        if name not in values:
+            return None
+        try:
+            value = ast.literal_eval(node)
+        except (ValueError, TypeError, SyntaxError):
+            return None
+        if not (isinstance(value, list | tuple) and all(isinstance(v, str) for v in value)):
+            return None
+        values[name] = list(value)
+    return values["packages"], values["definitions"]
+
+
+def _source_preamble(tree: ast.Module, workdir: Path, timeout: int):
+    """The template the scene's header sets, findings about it, and whether it compiles.
+
+    The preamble is compiled once on its own, so a definition that breaks it is one
+    finding naming the definition, not the same error once per literal.
+    """
+    from manim import TexTemplate
+
+    from manim_engineer.kit import installed_tex_packages, source_tex_template
+
+    call = next((n.value for n in tree.body if _is_preamble_call(n)), None)
+    if call is None:
+        return TexTemplate(), [], True
+
+    def finding(severity: Severity, message: str, fix: str) -> Finding:
+        return Finding(
+            gate="latex",
+            severity=severity,
+            category="source_preamble",
+            line=call.lineno,
+            message=message,
+            fix=fix,
+        )
+
+    keep = "Keep the generated source-preamble block exactly as written."
+    read = _read_preamble_call(call)
+    if read is None:
+        msg = f"{_PREAMBLE_CALL}(...) must take literal lists of strings"
+        return TexTemplate(), [finding(Severity.FATAL, msg, keep)], False
+    packages, definitions = read
+    outside = [p for p in packages if p not in TEX_PACKAGE_ALLOWLIST]
+    if outside:
+        msg = f"source preamble loads packages outside the allowlist: {', '.join(outside)}"
+        return TexTemplate(), [finding(Severity.FATAL, msg, keep)], False
+    installed = set(installed_tex_packages(packages))
+    out = [
+        finding(
+            Severity.WARN,
+            f"the source loads {p}, which this TeX install lacks; equations that use it will not compile",
+            f"Install it: tlmgr install {p}",
+        )
+        for p in dict.fromkeys(packages)
+        if p not in installed
+    ]
+    template = source_tex_template(packages, definitions)
+    try:
+        err = _compile_tex(template, "", None, workdir, timeout)
+    except subprocess.TimeoutExpired:
+        err = "LaTeX timed out"
+    if err is not None:
+        out.append(
+            finding(
+                Severity.FATAL,
+                f"the scene's source preamble does not compile: {err}",
+                "This is the paper's own definition, not scene code. Leave the source-preamble "
+                "block alone and write any expression that is not a source equation without it.",
+            )
+        )
+        return template, out, False
+    return template, out, True
 
 
 def check_latex(tree: ast.Module, timeout: int = 40) -> list[Finding]:
     jobs = tex_compile_jobs(tree)
-    if not jobs:
+    has_header = any(_is_preamble_call(n) for n in tree.body)
+    if not jobs and not has_header:
         return []
     import shutil
 
@@ -552,12 +666,14 @@ def check_latex(tree: ast.Module, timeout: int = 40) -> list[Finding]:
                 fix="",
             )
         ]
-    from manim import TexTemplate
-
-    template = TexTemplate()
-    out: list[Finding] = []
+    defined_by = "Manim's preamble (amsmath, amssymb)" + (
+        " or the scene's source preamble" if has_header else ""
+    )
     seen: set[tuple[str, str | None]] = set()
     with tempfile.TemporaryDirectory() as d:
+        template, out, preamble_ok = _source_preamble(tree, Path(d), timeout)
+        if not preamble_ok:
+            return out
         for lineno, kind, expression, environment in jobs:
             body = _as_manim_typesets(expression)
             if (body, environment) in seen:
@@ -583,7 +699,7 @@ def check_latex(tree: ast.Module, timeout: int = 40) -> list[Finding]:
                         severity=Severity.FATAL,
                         line=lineno,
                         message=f"{kind}({expression!r}) does not compile: {err}",
-                        fix="Fix the TeX: use only commands Manim's preamble defines (amsmath, amssymb), escape %, use raw strings; use Text() for plain words.",
+                        fix=f"Fix the TeX: use only commands {defined_by} defines, escape %, use raw strings; use Text() for plain words.",
                     )
                 )
     return out
