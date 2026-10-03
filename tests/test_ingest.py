@@ -294,3 +294,82 @@ def test_arxiv_ingest_flattens_inputs_with_injected_fetch(tmp_path: Path):
     assert r"\sm" in doc.meta["macros"]
     save_document(doc, tmp_path / "doc.json")
     assert load_document(tmp_path / "doc.json") == doc
+
+
+PREAMBLE_TEX = r"""
+\documentclass{article}
+\usepackage{amsmath,mathtools}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{hyperref}
+\newcommand{\loss}[1]{
+  \mathcal{L}\left(#1\right)
+}
+\newcommand{\secret}{\input{/etc/passwd}}
+\begin{document}
+\section{Loss}
+
+We minimise the loss.
+
+\begin{equation}
+\loss{\theta} \coloneqq \sum_i \ell_i
+\end{equation}
+
+\end{document}
+"""
+
+
+def test_latex_keeps_whole_definitions_and_allowlisted_packages():
+    doc = document_from_latex(PREAMBLE_TEX, source="https://arxiv.org/abs/2603.03251")
+    assert "\\newcommand{\\loss}[1]{\n  \\mathcal{L}\\left(#1\\right)\n}" in doc.meta["macros"]
+    assert doc.meta["tex_packages"] == ["mathtools", "xcolor"]
+    assert doc.meta["tex_packages_ignored"] == ["hyperref"]
+    dropped = doc.meta["macros_dropped"]
+    assert len(dropped) == 1
+    assert "secret" in dropped[0]["source"] and "input" in dropped[0]["reason"]
+    assert "secret" not in doc.meta["macros"]
+
+
+def test_arxiv_ingest_reads_definitions_from_the_papers_own_sty(tmp_path: Path):
+    src = tmp_path / "paper"
+    src.mkdir()
+    (src / "main.tex").write_text(
+        "\\documentclass{article}\n"
+        "\\usepackage{amsmath,notation}\n"
+        "\\begin{document}\n"
+        "\\section{Inner products}\n\n"
+        "\\begin{equation}\\langle \\vx, \\vy \\rangle\\end{equation}\n\n"
+        "\\end{document}\n"
+    )
+    (src / "notation.sty").write_text(
+        "\\ProvidesPackage{notation}\n"
+        "\\RequirePackage{bm}\n"
+        "% vectors are bold\n"
+        "\\newcommand{\\vx}{\\bm{x}}\n"
+        "\\newcommand{\\vy}{\\bm{y}}\n"
+        "\\def\\@internal{x}\n"
+    )
+    archive = tmp_path / "src.tar.gz"
+    with tarfile.open(archive, "w:gz") as tf:
+        for f in sorted(src.iterdir()):
+            tf.add(f, arcname=f.name)
+
+    doc = ingest("arXiv:2603.03251", workdir=tmp_path / "wd", fetch=lambda aid, wd: archive)
+    assert r"\newcommand{\vx}{\bm{x}}" in doc.meta["macros"]
+    assert r"\newcommand{\vy}{\bm{y}}" in doc.meta["macros"]
+    assert doc.meta["tex_packages"] == ["bm"]
+    assert "@internal" not in doc.meta["macros"]
+    assert "vectors are bold" not in doc.meta["macros"]
+
+
+def test_flatten_inlines_each_local_sty_once(tmp_path: Path):
+    from manim_engineer.ingest.arxiv import flatten
+
+    # a vendored package that names itself in comments and requires itself
+    (tmp_path / "main.tex").write_text("\\usepackage{notation}\n\\usepackage{notation}\n")
+    (tmp_path / "notation.sty").write_text(
+        "% load it with \\usepackage{notation} \\usepackage{notation}\n"
+        "\\RequirePackage{notation}\n"
+        "\\newcommand{\\R}{\\mathbb{R}}\n"
+    )
+    flat = flatten(tmp_path / "main.tex", tmp_path)
+    assert flat.count("\\newcommand{\\R}") == 1
