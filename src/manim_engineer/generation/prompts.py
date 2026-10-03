@@ -38,6 +38,14 @@ def _plan_block(plan: AnimationPlan) -> str:
             f"    narration: {b.narration}"
         )
     eqs = "\n".join(f"- {e.label}: `{e.latex}`" for e in plan.provenance.equations) or "(none)"
+    if plan.provenance.packages or plan.provenance.macros:
+        loads = ", ".join(plan.provenance.packages) or "no extra packages"
+        eqs += (
+            "\n\nSource preamble: a generated `use_source_preamble(...)` block after the kit import "
+            f"loads the paper's packages ({loads}) and the macro definitions the scene uses, so "
+            "source equations compile exactly as written, macros included. Do not write, edit or "
+            "remove that block, and never build a TexTemplate or pass tex_template=."
+        )
     ledger = (
         "\n".join(
             f"- {s.latex} = {s.meaning}" + (f" (color {s.color})" if s.color else "")
