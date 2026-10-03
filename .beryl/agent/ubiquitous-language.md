@@ -9,6 +9,7 @@
 | Document | `Document` | The normalized result of ingesting one input: segments plus assets and metadata | Immutable after ingestion | `Transcript` (only one modality) |
 | Equation Ledger | `Document.meta["equation_ledger"]` | Display equations extracted from a source document with their label, `para_id` and environment | Only adapters that read real source markup produce one | `Formula list` |
 | Verbatim Equation | `Equation.verbatim` | An equation carried from the source document rather than written by a model | The fidelity gate blocks only on these | `Quoted equation` |
+| Source Preamble | `Provenance.packages` + `Provenance.macros`, applied by `use_source_preamble` | The TeX packages and macro definitions a source document's equations need, applied to every TeX compile of its scenes | Allowlisted packages only; definitions that reach files or the shell are dropped; a scene's header holds only the definitions it uses | `Preamble hack`, `Macro file` |
 | Bucket | `Bucket` | A growing set of segments believed to describe one concept | Mutable; bounded; owned by planning | `Cluster` |
 | Maturity | `mature(bucket)` | Scored predicate deciding a bucket has enough concrete content to plan | Combines mass, cohesion, boundary, archetype confidence, concreteness, staleness, dedup | Single threshold |
 | Concept | `concept_id` | A stable slug for one animatable idea | Deduplicated by fingerprint | `Topic` |
