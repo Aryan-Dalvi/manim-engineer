@@ -1,3 +1,4 @@
+import ast
 from pathlib import Path
 
 import pytest
@@ -23,6 +24,7 @@ from manim_engineer.verification import (
     verify_tier1,
 )
 from manim_engineer.verification.runner import frames_from_result, run_probe, run_probe_inline
+from manim_engineer.verification.static import check_latex
 
 FIX = Path(__file__).parent / "fixtures" / "scenes"
 
@@ -60,6 +62,63 @@ def test_tier0_passes_good_scene_and_checks_equation_provenance():
     rep = verify_tier0(_cand("good_scene.py", "GoodScene"), _plan())
     assert rep.ok, [f.one_line() for f in rep.findings]
     assert not [f for f in rep.findings if f.gate == "fidelity"]
+
+
+def _tier0_latex_fatal(call: str) -> bool:
+    findings = check_latex(ast.parse(f"m = {call}\n"))
+    return any(f.gate == "latex" and f.severity == Severity.FATAL for f in findings)
+
+
+def _probe_compiles(tmp_path: Path, call: str) -> bool:
+    scene = tmp_path / "parity_scene.py"
+    scene.write_text(
+        "from manim_engineer.kit import *\n\n\n"
+        "class ParityScene(Scene):\n"
+        "    def construct(self):\n"
+        f"        self.add({call})\n"
+        "        self.wait(0.1)\n"
+    )
+    return run_probe_inline(scene, "ParityScene")["ok"]
+
+
+# Each call is one way Tier 0 and Manim disagreed, or one way they must keep agreeing.
+TEX_PARITY_CASES = [
+    r'MathTex(r"e^{i\pi} + 1 = 0")',
+    r'MathTex(r"a &= b \\ c &= d")',  # Manim typesets MathTex in align*
+    r'MathTex(r"\qty(\frac{a}{b})")',  # physics is not in Manim's preamble
+    r'MathTex(r"\frac{1}{2")',  # Manim closes stray braces before compiling
+    r'MathTex(r"e^{i", r"\tau} = 1")',  # one brace group split across parts
+    r'MathTex(r"{{a}} &= {{b}}")',  # double braces become parts
+    r'MathTex("a", "b", arg_separator=r"\undefinedsep")',  # only the joined string fails
+    r'MathTex(r"\frac{1}{2} \undefinedmacro")',
+    r'Tex(r"plain words")',
+    r'Tex(r"a & b")',
+    r'Title("Speculative decoding")',
+    r'BulletedList("draft", "verify")',
+]
+
+
+@pytest.mark.parametrize("call", TEX_PARITY_CASES)
+def test_tier0_latex_verdict_matches_the_probe(tmp_path: Path, call: str):
+    assert _tier0_latex_fatal(call) == (not _probe_compiles(tmp_path, call))
+
+
+def test_tier0_accepts_aligned_equations_that_manim_renders():
+    # 39 of the 54 source equations in arXiv 2603.03251 use & alignment
+    assert not _tier0_latex_fatal(r'MathTex(r"p &=& q \\ r &=& s")')
+
+
+def test_tier0_rejects_commands_missing_from_manims_preamble():
+    assert _tier0_latex_fatal(r'MathTex(r"\qty(\frac{a}{b})")')
+
+
+def test_tier0_leaves_literals_with_their_own_template_to_the_probe():
+    code = (
+        "tpl = TexTemplate()\n"
+        'tpl.add_to_preamble(r"\\usepackage{physics}")\n'
+        'm = MathTex(r"\\qty(x)", tex_template=tpl)\n'
+    )
+    assert not [f for f in check_latex(ast.parse(code)) if f.gate == "latex"]
 
 
 def test_probe_good_scene_yields_keyframes_and_no_findings():
