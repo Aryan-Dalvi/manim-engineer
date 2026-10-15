@@ -2,11 +2,9 @@
 
 Turn the hard parts of a talk into short, verified Manim animations.
 
-Input: live or recorded transcript, slides (PDF/PPTX), YouTube link, audio, or manuscript.
+Input: arXiv research paper, live or recorded transcript or slides (PDF/PPTX).
 Output: per-beat GIFs, MP4 clips, poster PNGs and a browsable gallery, plus an editable
 animation plan for each concept so revisions are cheap.
-
-See `docs/PLAN.md` for the full design and `docs/research/` for the research it rests on.
 
 ## Quick start
 
@@ -59,18 +57,6 @@ Models per tier: `--model-fast`, `--model-strong`, `--model-vision`; effort: `--
 - `cases/` — the nine-case corpus (easy / hard / challenging); `scripts/fetch_corpus.py` downloads the large inputs.
 - `outputs/` — run directories with galleries (untracked). See `outputs/README.md` for how to review.
 - `docs/PLAN.md`, `docs/research/` — the plan and the research behind it. `.beryl/agent/` — canonical design docs and ADRs.
-
-## Development
-
-```bash
-uv sync --all-extras --group dev
-.venv/bin/pytest -q                 # 60 tests, ~20 s (renders one scene)
-.venv/bin/ruff format src tests && .venv/bin/ruff check src tests
-./.beryl/scripts/check.sh           # the deterministic gate
-```
-
-On macOS, see [docs/macos-setup.md](docs/macos-setup.md) for toolchain prerequisites
-and the pycairo workaround.
 
 ## Origin and credits
 
