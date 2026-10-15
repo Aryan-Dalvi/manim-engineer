@@ -71,3 +71,20 @@ uv sync --all-extras --group dev
 
 On macOS, see [docs/macos-setup.md](docs/macos-setup.md) for toolchain prerequisites
 and the pycairo workaround.
+
+## Origin and credits
+
+manim-engineer started at NUS AI Society. [@checkpoint214159](https://github.com/checkpoint214159)
+built the original pipeline (ingest, planning, code generation, verification and rendering).
+
+My contributions since then:
+- **Source fidelity for arXiv papers.** An arXiv LaTeX ingest adapter that builds an equation
+  ledger and carries source equations into each animation plan word for word. A verification check
+  blocks any render whose equations were changed or dropped (ADR 0007).
+- **Presenter deck.** Every run now produces a Reveal.js presenter deck built from the section
+  clips (ADR 0008).
+- **Approval pins.** `approve` pins a concept's plan and accepted code. Re-runs keep approved
+  concepts, and the deck is built only from them (ADR 0009).
+- macOS setup docs and test-manifest fixes.
+
+Contributors: @checkpoint214159, @Aryan-Dalvi, Archit.
