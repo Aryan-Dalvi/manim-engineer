@@ -14,6 +14,8 @@ from manim_engineer.core import (
     SymbolEntry,
 )
 from manim_engineer.generation import (
+    apply_source_preamble,
+    codegen_prompt,
     extract_code,
     fallback_scene,
     generate,
@@ -129,3 +131,65 @@ def test_fallback_scene_passes_deterministic_gates(tmp_path: Path):
     t1 = verify_tier1(cand, p, inline=True)
     assert t1.ok, [f.one_line() for f in t1.findings]
     assert not [f for f in t1.findings if f.gate == "coverage"]
+
+
+KL_DEFINITION = "\\newcommand{\\KL}[2]{\n  D_{\\mathrm{KL}}(#1 \\| #2)\n}"
+KL_SCENE = (
+    "from manim_engineer.kit import *\n\n\n"
+    "class ScaledAttentionScene(Scene):\n"
+    "    def construct(self):\n"
+    '        self.add(MathTex(r"\\KL{p}{q} \\coloneqq \\R"))\n'
+)
+
+
+def _paper_plan() -> AnimationPlan:
+    p = _plan()
+    p.provenance = Provenance(
+        packages=["mathtools"],
+        macros="\n".join(
+            [r"\newcommand{\R}{\mathbb{R}}", KL_DEFINITION, r"\newcommand{\unused}{u}"]
+        ),
+    )
+    return p
+
+
+def _header(code: str) -> str:
+    return code.split("class ")[0]
+
+
+def test_normalize_writes_the_source_preamble_the_scene_uses():
+    code = normalize(KL_SCENE, _paper_plan())
+    assert code.startswith("from manim_engineer.kit import *\n")
+    header = _header(code)
+    assert "use_source_preamble(" in header and "'mathtools'" in header
+    assert r"\newcommand{\R}{\mathbb{R}}" in header and r"D_{\mathrm{KL}}" in header
+    assert r"\unused" not in header
+    compile(code, "scene.py", "exec")
+
+
+def test_normalize_replaces_a_header_the_model_edited():
+    first = normalize(KL_SCENE, _paper_plan())
+    edited = first.replace("'mathtools'", "'bm'").replace(r"D_{\mathrm{KL}}", r"\input{x}")
+    assert normalize(edited, _paper_plan()) == first
+
+
+def test_plans_without_a_source_preamble_get_no_header():
+    assert apply_source_preamble(KL_SCENE, _plan()) == KL_SCENE
+    assert "use_source_preamble" not in normalize(KL_SCENE, _plan())
+
+
+def test_fallback_scene_carries_the_source_preamble(tmp_path: Path):
+    p = _paper_plan()
+    p.provenance.equations = [Equation(label="kl", latex=r"\KL{p}{q} \coloneqq 0", verbatim=True)]
+    code = fallback_scene(p)
+    assert "use_source_preamble(" in _header(code) and r"D_{\mathrm{KL}}" in _header(code)
+    path = tmp_path / "fallback.py"
+    path.write_text(code)
+    cand = Candidate(plan_id=p.plan_id, attempt=1, code_path=str(path), scene_class=p.scene_class)
+    t0 = verify_tier0(cand, p)
+    assert t0.ok, [f.one_line() for f in t0.findings]
+
+
+def test_prompts_explain_the_source_preamble_only_when_there_is_one():
+    assert "use_source_preamble" in codegen_prompt(_paper_plan())
+    assert "use_source_preamble" not in codegen_prompt(_plan())

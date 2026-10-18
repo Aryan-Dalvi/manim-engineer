@@ -129,17 +129,22 @@ def run_probe(path: str | Path, cls_name: str, wall_s: int | None = None) -> dic
 
 def run_probe_inline(path: str | Path, cls_name: str) -> dict[str, Any]:
     """Same as run_probe but in-process (for tests and debugging)."""
+    from manim import tempconfig
+
     from manim_engineer.verification.probe import load_scene, probe
 
-    try:
-        frames = probe(load_scene(path, cls_name))
-        return {
-            "ok": True,
-            "duration_s": frames[-1].t if frames else 0.0,
-            "frames": [asdict(f) for f in frames],
-        }
-    except BaseException as e:  # noqa: BLE001
-        return {"ok": False, **condense(e, str(path))}
+    # importing a scene can set Manim's TeX template (use_source_preamble); leaving
+    # tempconfig resets it, even when the import itself fails afterwards
+    with tempconfig({}):
+        try:
+            frames = probe(load_scene(path, cls_name))
+            return {
+                "ok": True,
+                "duration_s": frames[-1].t if frames else 0.0,
+                "frames": [asdict(f) for f in frames],
+            }
+        except BaseException as e:  # noqa: BLE001
+            return {"ok": False, **condense(e, str(path))}
 
 
 def frames_from_result(result: dict[str, Any]):

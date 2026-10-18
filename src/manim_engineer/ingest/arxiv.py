@@ -15,7 +15,15 @@ import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
-from manim_engineer.core import Document, Modality, Segment, SegmentKind, SourceSpan
+from manim_engineer.core import (
+    Document,
+    Modality,
+    Segment,
+    SegmentKind,
+    SourceSpan,
+    parse_macro_definitions,
+    parse_tex_packages,
+)
 from manim_engineer.ingest.common import doc_id_for
 
 SourceFetcher = Callable[[str, Path], Path]
@@ -25,6 +33,7 @@ _PREFIXED = re.compile(r"^arxiv:\s*(\d{4}\.\d{4,5})(v\d+)?$", re.I)
 _IN_URL = re.compile(r"arxiv\.org/(?:abs|pdf|e-print|src)/(\d{4}\.\d{4,5})(v\d+)?", re.I)
 
 _INPUT = re.compile(r"\\(?:input|include|subfile)\s*\{([^}]+)\}")
+_PACKAGE = re.compile(r"\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}")
 _DISPLAY = re.compile(
     r"\\begin\{(equation\*?|align\*?|gather\*?|multline\*?|eqnarray\*?)\}(.+?)\\end\{\1\}"
     r"|\\\[(.+?)\\\]"
@@ -34,9 +43,6 @@ _DISPLAY = re.compile(
 _LABEL = re.compile(r"\\label\s*\{([^}]+)\}")
 _SECTION = re.compile(r"^\\(?:sub)*section\*?\s*\{(.*?)\}", re.S)
 _TITLE = re.compile(r"\\title\s*\{(.+?)\}\s*\n", re.S)
-_MACRO = re.compile(
-    r"^[ \t]*\\(?:newcommand|renewcommand|providecommand|DeclareMathOperator|def)\b.*$", re.M
-)
 _BEGIN_DOC = re.compile(r"\\begin\{document\}")
 _END_DOC = re.compile(r"\\end\{document\}")
 
@@ -120,9 +126,16 @@ def strip_comments(tex: str) -> str:
     return "\n".join(out)
 
 
-def flatten(main: Path, root: Path, depth: int = 0) -> str:
-    """Inline \\input / \\include / \\subfile so the paper is one string."""
-    text = main.read_text(errors="ignore")
+def flatten(main: Path, root: Path, depth: int = 0, _inlined: set[Path] | None = None) -> str:
+    """Inline \\input / \\include / \\subfile, and the paper's own .sty files, as one string.
+
+    Papers often keep their notation in a package they ship (`\\usepackage{notation}`),
+    so a local .sty is appended after the line that loads it, once. Comments go
+    first: a vendored package such as natbib.sty names itself in its documentation,
+    and following those lines inlines it exponentially.
+    """
+    inlined = set() if _inlined is None else _inlined
+    text = strip_comments(main.read_text(errors="ignore"))
     if depth >= 8:
         return text
 
@@ -130,10 +143,17 @@ def flatten(main: Path, root: Path, depth: int = 0) -> str:
         name = m.group(1).strip()
         for cand in (root / name, root / f"{name}.tex"):
             if cand.is_file():
-                return flatten(cand, root, depth + 1)
+                return flatten(cand, root, depth + 1, inlined)
         return ""
 
-    return _INPUT.sub(sub, text)
+    def local_packages(m: re.Match) -> str:
+        own = [root / f"{n.strip()}.sty" for n in m.group(1).split(",") if n.strip()]
+        own = [p for p in own if p.is_file() and p not in inlined]
+        inlined.update(own)
+        return "\n".join([m.group(0), *(flatten(p, root, depth + 1, inlined) for p in own)])
+
+    # packages first, so a .sty pulled in through \input is not inlined twice
+    return _INPUT.sub(sub, _PACKAGE.sub(local_packages, text))
 
 
 def clean_text(s: str) -> str:
@@ -150,16 +170,23 @@ def clean_text(s: str) -> str:
 def document_from_latex(
     tex: str, source: str, title: str | None = None, arxiv_id_: str = ""
 ) -> Document:
-    """Parse flattened LaTeX into Segments plus an equation ledger in `meta`."""
+    """Parse flattened LaTeX into Segments plus an equation ledger in `meta`.
+
+    `meta` also carries the source preamble: the paper's macro definitions as
+    written, the allowlisted math packages it loads, and what was left out and why.
+    """
     doc_id = doc_id_for(source)
-    macros = "\n".join(m.group(0).strip() for m in _MACRO.finditer(tex))
     if title is None:
         mt = _TITLE.search(tex)
         title = clean_text(mt.group(1)) if mt else ""
 
     body = tex
+    preamble = tex
     if (bd := _BEGIN_DOC.search(body)) is not None:
+        preamble = tex[: bd.start()]
         body = body[bd.end() :]
+    macro_scan = parse_macro_definitions(tex)
+    package_scan = parse_tex_packages(preamble)
     if (ed := _END_DOC.search(body)) is not None:
         body = body[: ed.start()]
 
@@ -240,7 +267,12 @@ def document_from_latex(
         segments=segments,
         meta={
             "arxiv_id": arxiv_id_,
-            "macros": macros,
+            "macros": "\n".join(d.source for d in macro_scan.definitions),
+            "macros_dropped": [
+                {"source": d.source, "reason": d.reason} for d in macro_scan.dropped
+            ],
+            "tex_packages": package_scan.allowed,
+            "tex_packages_ignored": package_scan.ignored,
             "equation_ledger": ledger,
             "has_equation_ledger": bool(ledger),
         },

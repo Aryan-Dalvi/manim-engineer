@@ -40,6 +40,11 @@ from manim_engineer.kit.helpers import (
     undim,
     wrap_text,
 )
+from manim_engineer.kit.preamble import (
+    installed_tex_packages,
+    source_tex_template,
+    use_source_preamble,
+)
 from manim_engineer.kit.style import (
     BODY_SIZE,
     CAPTION_SIZE,
@@ -124,6 +129,9 @@ KIT_EXPORTS = [
     "ComparisonTable",
     "TensorGrid",
     "CellGrid",
+    "use_source_preamble",
+    "source_tex_template",
+    "installed_tex_packages",
 ]
 
 __all__ = KIT_EXPORTS + [n for n in dir(_manim) if not n.startswith("_")]

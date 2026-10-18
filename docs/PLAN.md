@@ -184,6 +184,7 @@ Inputs live in `cases/` (small files committed; large media fetched by
 | hard | `h1_transformer_slides` | PDF lecture deck (CS224N transformers) | slide adapter, slide-index provenance, architecture diagram archetype |
 | hard | `h2_attention_talk` | full 26-minute transcript (3b1b Attention) | bucketing and triage on long input, several plans, dedup |
 | hard | `h3_specdec_paper` | arXiv PDF (Speculative Speculative Decoding) | manuscript adapter with equations; direct comparison with Shahu's sample video |
+| hard | `h4_specdec_arxiv` | arXiv LaTeX source of the h3 paper | arXiv adapter, verbatim source equations, source preamble (packages and macros), fidelity gate |
 | challenging | `c1_live_replay` | 20-minute window of Karpathy "Let's build GPT", replayed as a live stream | live bucketing, latency, priority queue |
 | challenging | `c2_multimodal_fusion` | transcript plus paper (3b1b Attention + Attention Is All You Need) | multi-span provenance, symbol ledger from paper equations |
 | challenging | `c3_loss_landscape` | markdown with equations and plots | plot with ValueTracker, gradient descent trace, 3D gated off by default |

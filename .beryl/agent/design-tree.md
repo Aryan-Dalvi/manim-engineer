@@ -36,6 +36,9 @@ gallery, and revisions flow back through the plan.
 | Presenter deck | Reveal.js 6.0.2 vendored, one slide per beat clip, narration as notes; no manim-slides | 2026-09-17 | 0008 |
 | Deck scope | Concepts whose approval pin holds; no "needs review" badge | 2026-09-17 | 0009 |
 | Approval pins | SHA-256 of canonical plan JSON and accepted scene code in `review/approvals.json`; `run` keeps held pins and revokes broken ones with a reason | 2026-09-17 | 0009 |
+| Tier 0 LaTeX precompile | Compiles exactly what Manim compiles: its `TexTemplate`, per-class environment, joined string and parts, its own string clean-up and compile command | 2026-10-03 | 0010 |
+| Source preamble | Allowlisted packages and the macro definitions a scene uses, in a generated `use_source_preamble(...)` header that the kit applies at import and Tier 0 reads | 2026-10-03 | 0010 |
+| TeX package allowlist | `amsfonts`, `bm`, `dsfont`, `mathrsfs`, `mathtools`, `physics`, `xcolor`, `xspace`; a package joins only with a passing compile test | 2026-10-03 | 0010 |
 
 ## Pressure Points
 
@@ -50,7 +53,11 @@ gallery, and revisions flow back through the plan.
 - YouTube access is fragile; audio fallback exists.
 - Decks are built from section clips rather than manim-slides (generated scenes subclass `Scene`, not `Slide`): python-pptx for PPTX and vendored Reveal.js for HTML. Upgrading Reveal.js means replacing all vendored files together.
 - The fidelity gate's resemblance threshold (0.82) separates "altered source equation" (fatal) from "not in the source" (warn). It is uncalibrated: no corpus run has exercised it yet, and a paper whose prose restates a formula in a slightly different form is the likely first false positive.
-- `Provenance.macros` carries a paper's `\newcommand` definitions into the plan, but nothing injects them into the render's `TexTemplate` yet, so an equation depending on a paper macro passes the fidelity gate and then fails to compile.
+- The TeX package allowlist is a judgment call. Too narrow, and a paper's equations still fail, now with a clear Tier 0 finding. Too wide, and a package could break dvisvgm output. `bbm`, `cancel`, `siunitx`, `braket` and others are left out until they are installed and pass the compile test.
+- A paper definition that fails in TeX is terminal for any source equation that uses it: the fidelity gate requires the equation verbatim, and the header cannot be repaired by the model.
+- `eqnarray` equations are typeset in `align*`, so `&=&` gets a column gap the paper does not have.
+- Verbatim source equations still reach `MathTex` without the source preamble's deny-list; a hostile paper could put `\input` in an equation.
+- Tier 0 reuses Manim's private `SingleStringMathTex._get_modified_expression` so it cleans strings exactly as Manim does. ManimCE is pinned to 0.19, and the parity test fails if an upgrade changes it.
 - Approved concepts are still re-planned on every `run` because concept ids come from the planner: one plan call each per re-run, and a near-duplicate under a new id is rendered again. Follow-up: pass approved concept names into triage so planning can skip them.
 - `revise_run` bumps and saves the plan even when the revision fails, so `approve` refuses the animation it kept until that concept is re-rendered.
 
