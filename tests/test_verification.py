@@ -1,6 +1,8 @@
+import ast
 from pathlib import Path
 
 import pytest
+from manim import TexTemplate, config
 
 from manim_engineer.core import (
     AnimationPlan,
@@ -23,6 +25,7 @@ from manim_engineer.verification import (
     verify_tier1,
 )
 from manim_engineer.verification.runner import frames_from_result, run_probe, run_probe_inline
+from manim_engineer.verification.static import check_latex
 
 FIX = Path(__file__).parent / "fixtures" / "scenes"
 
@@ -62,6 +65,125 @@ def test_tier0_passes_good_scene_and_checks_equation_provenance():
     assert not [f for f in rep.findings if f.gate == "fidelity"]
 
 
+def _tier0_latex_fatal(call: str) -> bool:
+    findings = check_latex(ast.parse(f"m = {call}\n"))
+    return any(f.gate == "latex" and f.severity == Severity.FATAL for f in findings)
+
+
+def _probe_compiles(tmp_path: Path, call: str) -> bool:
+    scene = tmp_path / "parity_scene.py"
+    scene.write_text(
+        "from manim_engineer.kit import *\n\n\n"
+        "class ParityScene(Scene):\n"
+        "    def construct(self):\n"
+        f"        self.add({call})\n"
+        "        self.wait(0.1)\n"
+    )
+    return run_probe_inline(scene, "ParityScene")["ok"]
+
+
+# Each call is one way Tier 0 and Manim disagreed, or one way they must keep agreeing.
+TEX_PARITY_CASES = [
+    r'MathTex(r"e^{i\pi} + 1 = 0")',
+    r'MathTex(r"a &= b \\ c &= d")',  # Manim typesets MathTex in align*
+    r'MathTex(r"\qty(\frac{a}{b})")',  # physics is not in Manim's preamble
+    r'MathTex(r"\frac{1}{2")',  # Manim closes stray braces before compiling
+    r'MathTex(r"e^{i", r"\tau} = 1")',  # one brace group split across parts
+    r'MathTex(r"{{a}} &= {{b}}")',  # double braces become parts
+    r'MathTex("a", "b", arg_separator=r"\undefinedsep")',  # only the joined string fails
+    r'MathTex(r"\frac{1}{2} \undefinedmacro")',
+    r'Tex(r"plain words")',
+    r'Tex(r"a & b")',
+    r'Title("Speculative decoding")',
+    r'BulletedList("draft", "verify")',
+]
+
+
+@pytest.mark.parametrize("call", TEX_PARITY_CASES)
+def test_tier0_latex_verdict_matches_the_probe(tmp_path: Path, call: str):
+    assert _tier0_latex_fatal(call) == (not _probe_compiles(tmp_path, call))
+
+
+def test_tier0_accepts_aligned_equations_that_manim_renders():
+    # 39 of the 54 source equations in arXiv 2603.03251 use & alignment
+    assert not _tier0_latex_fatal(r'MathTex(r"p &=& q \\ r &=& s")')
+
+
+def test_tier0_rejects_commands_missing_from_manims_preamble():
+    assert _tier0_latex_fatal(r'MathTex(r"\qty(\frac{a}{b})")')
+
+
+def test_tier0_leaves_literals_with_their_own_template_to_the_probe():
+    code = (
+        "tpl = TexTemplate()\n"
+        'tpl.add_to_preamble(r"\\usepackage{physics}")\n'
+        'm = MathTex(r"\\qty(x)", tex_template=tpl)\n'
+    )
+    assert not [f for f in check_latex(ast.parse(code)) if f.gate == "latex"]
+
+
+def _with_header(body: str, packages=(), definitions=()) -> str:
+    # raw strings, as generation writes them, so the definitions read as plain TeX
+    defs = ", ".join(f'r"{d}"' for d in definitions)
+    return (
+        "from manim_engineer.kit import *\n\n"
+        f"use_source_preamble(packages={list(packages)!r}, definitions=[{defs}])\n\n" + body
+    )
+
+
+KL = r"\newcommand{\KL}{D_{\mathrm{KL}}}"
+
+
+def test_tier0_compiles_with_the_scenes_source_preamble():
+    body = 'm = MathTex(r"\\KL(p \\| q) \\coloneqq 1")\n'
+    with_header = check_latex(ast.parse(_with_header(body, ["mathtools"], [KL])))
+    assert not [f for f in with_header if f.severity == Severity.FATAL]
+    without = check_latex(ast.parse(body))
+    assert [f for f in without if f.gate == "latex" and f.severity == Severity.FATAL]
+
+
+def test_tier0_matches_the_probe_for_a_scene_with_a_header(tmp_path: Path):
+    code = _with_header(
+        "class KlScene(Scene):\n"
+        "    def construct(self):\n"
+        '        self.add(MathTex(r"\\KL(p \\| q) \\coloneqq 1"))\n'
+        "        self.wait(0.1)\n",
+        ["mathtools"],
+        [KL],
+    )
+    scene = tmp_path / "kl_scene.py"
+    scene.write_text(code)
+    assert run_probe_inline(scene, "KlScene")["ok"]
+    assert not [f for f in check_latex(ast.parse(code)) if f.severity == Severity.FATAL]
+
+
+def test_tier0_reports_a_broken_source_preamble_once():
+    # parameters must be numbered consecutively, so TeX stops at the definition
+    broken = r"\def\bad#1#3{#1}"
+    body = 'a = MathTex(r"\\bad{x}{y}")\nb = MathTex(r"e^{i\\pi}")\n'
+    findings = check_latex(ast.parse(_with_header(body, [], [broken])))
+    assert len(findings) == 1
+    f = findings[0]
+    assert f.severity == Severity.FATAL and f.category == "source_preamble"
+    assert "\\bad" in f.message and f.fix
+
+
+def test_tier0_warns_about_a_source_package_this_machine_lacks(monkeypatch):
+    import manim_engineer.kit.preamble as kit_preamble
+
+    monkeypatch.setattr(kit_preamble, "_kpsewhich", lambda names: frozenset())
+    findings = check_latex(ast.parse(_with_header('m = MathTex(r"x")\n', ["mathtools"])))
+    warn = [f for f in findings if f.severity == Severity.WARN]
+    assert len(warn) == 1 and "mathtools" in warn[0].message
+    assert "tlmgr install mathtools" in warn[0].fix
+    assert not [f for f in findings if f.severity == Severity.FATAL]
+
+
+def test_tier0_refuses_a_header_package_outside_the_allowlist():
+    findings = check_latex(ast.parse(_with_header('m = MathTex(r"x")\n', ["shellesc"])))
+    assert [f for f in findings if f.severity == Severity.FATAL and "shellesc" in f.message]
+
+
 def test_probe_good_scene_yields_keyframes_and_no_findings():
     rep = verify_tier1(_cand("good_scene.py", "GoodScene"), _plan(), inline=True)
     assert rep.ok, [f.one_line() for f in rep.findings]
@@ -86,6 +208,27 @@ def test_probe_runtime_error_is_condensed_and_categorized():
     assert res["ok"] is False and res["category"] == "api"
     assert "shift_right" in res["error"] and res["line"] == 9
     assert res["user_frames"] and "shift_right" in res["user_frames"][-1]["source"]
+
+
+def test_inline_probe_applies_a_scene_header_and_leaves_the_caller_alone(tmp_path: Path):
+    header = (
+        "from manim_engineer.kit import *\n\n"
+        'use_source_preamble(definitions=[r"\\newcommand{\\KL}{D_{\\mathrm{KL}}}"])\n'
+    )
+    scene = tmp_path / "kl_scene.py"
+    scene.write_text(
+        header + "\n\nclass KlScene(Scene):\n"
+        "    def construct(self):\n"
+        '        self.add(MathTex(r"\\KL(p \\| q)"))\n'
+        "        self.wait(0.1)\n"
+    )
+    broken = tmp_path / "broken_scene.py"
+    broken.write_text(header + "\nraise ValueError('module fails after its header')\n")
+
+    assert run_probe_inline(scene, "KlScene")["ok"]
+    assert config.tex_template.preamble == TexTemplate().preamble
+    assert not run_probe_inline(broken, "KlScene")["ok"]
+    assert config.tex_template.preamble == TexTemplate().preamble
 
 
 @pytest.mark.integration
@@ -177,6 +320,14 @@ def test_fidelity_flags_altered_source_equation_and_warns_on_extras():
     )
     assert any(f.severity == Severity.WARN and "not in the source" in f.message for f in findings)
     assert all(f.fix for f in findings)
+
+
+def test_fidelity_does_not_count_the_source_preamble_as_on_screen():
+    # the header holds the paper's definitions; it is never drawn
+    hidden = rf"\newcommand{{\softmaxeq}}{{{SOFTMAX}}}"
+    code = _with_header('t = Text("no equation here")\n', [], [hidden])
+    findings = check_equation_provenance(_sourced_plan(), code)
+    assert any(f.severity == Severity.FATAL and "not on screen" in f.message for f in findings)
 
 
 def test_text_floor_scales_with_probe_resolution():

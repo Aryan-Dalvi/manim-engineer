@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from pydantic import ValidationError
 
 from manim_engineer.core import (
+    TEX_PACKAGE_ALLOWLIST,
     AnimationPlan,
     Archetype,
     ArchetypeChoice,
@@ -238,6 +239,8 @@ class Planner:
             quotes=[q for q in (data.get("quotes") or []) if isinstance(q, str)][:3],
             equations=_equations(data, eq_segs, _ledger_index(doc)),
             segment_ids=[s.seg_id for s in bucket.segments],
+            # an older or hand-edited document.json may list a package off the allowlist
+            packages=[p for p in doc.meta.get("tex_packages") or [] if p in TEX_PACKAGE_ALLOWLIST],
             macros=str(doc.meta.get("macros", "")),
         )
         level = data.get("audience_level") or self.cfg.audience

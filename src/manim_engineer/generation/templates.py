@@ -8,6 +8,7 @@ narration line and a caption. Layout-safe by construction via the kit.
 from __future__ import annotations
 
 from manim_engineer.core import AnimationPlan
+from manim_engineer.generation.preamble import apply_source_preamble
 
 
 def _py(s: str) -> str:
@@ -58,4 +59,5 @@ def fallback_scene(plan: AnimationPlan) -> str:
     lines.append("        self.play(FadeIn(cap, shift=UP * 0.2), run_time=RT_FADE)")
     lines.append("        self.wait(HOLD_LONG)")
     lines.append("        fade_all(self)")
-    return "\n".join(lines) + "\n"
+    # the source equations above may need the paper's packages and macros
+    return apply_source_preamble("\n".join(lines) + "\n", plan)

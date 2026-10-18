@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from manim_engineer.core import AnimationPlan, Finding
 from manim_engineer.generation.knowledge_pack import guess_domain, knowledge_for
+from manim_engineer.generation.preamble import apply_source_preamble
 from manim_engineer.generation.prompts import (
     codegen_prompt,
     repair_prompt,
@@ -41,7 +42,8 @@ def extract_code(text: str) -> str:
 
 
 def normalize(code: str, plan: AnimationPlan) -> str:
-    """Cheap deterministic fixes: kit import first, legacy names, class name, config edits."""
+    """Cheap deterministic fixes: kit import first, legacy names, class name, config edits,
+    and the plan's source preamble written in after the imports."""
     for pat, rep in LEGACY_FIXES.items():
         code = re.sub(pat, rep, code)
     lines = [ln for ln in code.splitlines() if not re.match(r"^\s*config\.[a-z_]+\s*=", ln)]
@@ -69,7 +71,7 @@ def normalize(code: str, plan: AnimationPlan) -> str:
     if m and m.group(1) != plan.scene_class:
         code = code.replace(f"class {m.group(1)}(", f"class {plan.scene_class}(", 1)
         code = re.sub(rf"\b{m.group(1)}\b", plan.scene_class, code)
-    return code
+    return apply_source_preamble(code, plan)
 
 
 def _knowledge(plan: AnimationPlan) -> str:
