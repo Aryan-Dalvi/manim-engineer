@@ -8,6 +8,7 @@ pure and does the whole extraction; only `fetch_source` touches the network.
 from __future__ import annotations
 
 import gzip
+import json
 import re
 import shutil
 import tarfile
@@ -100,13 +101,68 @@ def extract_source(archive: Path, dest: Path) -> Path:
 
 
 def main_tex(root: Path) -> Path:
+    """Pick the paper's top-level file: the one arXiv declares, else the best-ranked document.
+
+    Source bundles often carry more than one compilable file: a conference template's
+    filled-in sample paper, a supplement, or a nested copy of the whole project.
+    """
     candidates = sorted(root.rglob("*.tex"))
     if not candidates:
         raise ValueError(f"no .tex file found under {root}")
-    for p in candidates:
-        if "\\documentclass" in p.read_text(errors="ignore"):
-            return p
-    return candidates[0]
+    declared = _declared_toplevel(root)
+    if declared is not None:
+        return declared
+    texts = {p: p.read_text(errors="ignore") for p in candidates}
+    documents = [
+        p for p in candidates if "\\documentclass" in texts[p] and _BEGIN_DOC.search(texts[p])
+    ]
+    documents = documents or [p for p in candidates if "\\documentclass" in texts[p]]
+    if not documents:
+        return candidates[0]
+    return min(
+        documents,
+        key=lambda p: (
+            bool(_TEMPLATE_STEM.search(p.stem)),
+            len(p.relative_to(root).parts),
+            -len(texts[p]),
+            str(p),
+        ),
+    )
+
+
+# Conference templates ship a sample paper (example_paper.tex, sample.tex, ...) with
+# its own \documentclass; it is only chosen when nothing else compiles.
+_TEMPLATE_STEM = re.compile(r"(?:^|[_-])(?:example|sample|template)(?:[_-]|$)", re.I)
+
+
+def _declared_toplevel(root: Path) -> Path | None:
+    """The file named as top-level in arXiv's 00README (JSON) or legacy 00README.XXX."""
+    names: list[str] = []
+    for readme in (root / "00README.json", root / "00README"):
+        if readme.is_file():
+            try:
+                sources = json.loads(readme.read_text(errors="ignore")).get("sources", [])
+            except (ValueError, AttributeError):
+                continue
+            names += [
+                s["filename"]
+                for s in sources
+                if isinstance(s, dict)
+                and "filename" in s
+                and s.get("usage", "toplevel") == "toplevel"
+            ]
+    legacy = root / "00README.XXX"
+    if legacy.is_file():
+        for line in legacy.read_text(errors="ignore").splitlines():
+            parts = line.split()
+            if len(parts) == 2 and parts[1] == "toplevelfile":
+                names.append(parts[0])
+    base = root.resolve()
+    for name in names:
+        path = (root / name).resolve()
+        if path.suffix == ".tex" and path.is_file() and path.is_relative_to(base):
+            return path
+    return None
 
 
 def strip_comments(tex: str) -> str:

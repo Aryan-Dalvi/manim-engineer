@@ -296,6 +296,83 @@ def test_arxiv_ingest_flattens_inputs_with_injected_fetch(tmp_path: Path):
     assert load_document(tmp_path / "doc.json") == doc
 
 
+def _paper_tex(title: str, equation: str, filler_lines: int = 0) -> str:
+    return (
+        "\\documentclass{article}\n"
+        f"\\title{{{title}}}\n"
+        "\\begin{document}\n"
+        "\\section{Method}\n\n" + "Body text.\n\n" * filler_lines + "\\begin{equation}\n"
+        f"{equation}\n"
+        "\\end{equation}\n\n"
+        "\\end{document}\n"
+    )
+
+
+def _arxiv_archive(tmp_path: Path, files: dict[str, str]) -> Path:
+    archive = tmp_path / "src.tar.gz"
+    with tarfile.open(archive, "w:gz") as tf:
+        for name, text in files.items():
+            path = tmp_path / "staging" / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
+            tf.add(path, arcname=name)
+    return archive
+
+
+PAPER = _paper_tex("Fast Inference from Transformers", r"\alpha = \min(1, p/q)", filler_lines=20)
+TEMPLATE = _paper_tex("Submission and Formatting Instructions", r"x = y", filler_lines=5)
+
+
+def test_arxiv_main_tex_is_the_paper_not_a_nested_template_copy(tmp_path: Path):
+    # The layout of 2211.17192: the paper and the ICML sample at the top level, plus a
+    # nested copy of both whose capitalised folder name sorts before everything else.
+    archive = _arxiv_archive(
+        tmp_path,
+        {
+            "Speculative Decoding (ICML)/example_paper.tex": TEMPLATE,
+            "Speculative Decoding (ICML)/main.tex": PAPER,
+            "example_paper.tex": TEMPLATE,
+            "main.tex": PAPER,
+        },
+    )
+    doc = ingest("arXiv:2211.17192", workdir=tmp_path / "wd", fetch=lambda aid, wd: archive)
+    assert doc.title == "Fast Inference from Transformers"
+    assert [e["latex"] for e in doc.meta["equation_ledger"]] == [r"\alpha = \min(1, p/q)"]
+
+
+def test_arxiv_main_tex_skips_a_template_sample_even_when_it_is_longer(tmp_path: Path):
+    long_template = _paper_tex("Submission and Formatting Instructions", r"x = y", filler_lines=60)
+    archive = _arxiv_archive(tmp_path, {"example_paper.tex": long_template, "paper.tex": PAPER})
+    doc = ingest("arXiv:2211.17192", workdir=tmp_path / "wd", fetch=lambda aid, wd: archive)
+    assert doc.title == "Fast Inference from Transformers"
+
+
+@pytest.mark.parametrize(
+    "readme_name, readme_text",
+    [
+        (
+            "00README.json",
+            json.dumps({"sources": [{"filename": "short.tex", "usage": "toplevel"}]}),
+        ),
+        ("00README.XXX", "short.tex toplevelfile\n"),
+    ],
+)
+def test_arxiv_main_tex_follows_the_declared_toplevel_file(
+    tmp_path: Path, readme_name: str, readme_text: str
+):
+    # Without the declaration the longer file would win.
+    archive = _arxiv_archive(
+        tmp_path,
+        {
+            readme_name: readme_text,
+            "long.tex": _paper_tex("Supplementary Material", r"z = 1", filler_lines=80),
+            "short.tex": PAPER,
+        },
+    )
+    doc = ingest("arXiv:2211.17192", workdir=tmp_path / "wd", fetch=lambda aid, wd: archive)
+    assert doc.title == "Fast Inference from Transformers"
+
+
 PREAMBLE_TEX = r"""
 \documentclass{article}
 \usepackage{amsmath,mathtools}
