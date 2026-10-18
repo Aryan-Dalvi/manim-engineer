@@ -1,17 +1,25 @@
 # manim-engineer
 
-Turn the hard parts of a talk into short, verified Manim animations.
+Turn the hard parts of a research paper or talk into short, verified Manim animations.
 
-Input: arXiv research paper, live or recorded transcript or slides (PDF/PPTX).
-Output: per-beat GIFs, MP4 clips, poster PNGs and a browsable gallery, plus an editable
-animation plan for each concept so revisions are cheap.
+Input: an arXiv paper (ID or URL), a PDF paper or slide deck, PPTX, Markdown with equations,
+or a live or recorded transcript.
+Output: per-beat GIFs, MP4 clips, poster PNGs, a browsable gallery and a presenter deck, plus an
+editable animation plan for each concept so revisions are cheap.
+
+<!-- Demo GIF: drop one of your arXiv run's GIFs here, e.g. ![demo](docs/demo.gif) -->
 
 ## Quick start
 
 ```bash
 uv sync --all-extras
+
+# From an arXiv paper: fetches the LaTeX source and keeps its equations exact
+.venv/bin/manim-engineer run 2211.17192 --out outputs/specdec
+open outputs/specdec/index.html
+
+# Or from a local Markdown file
 .venv/bin/manim-engineer run cases/e1_softmax_markdown/input.md --out outputs/e1
-open outputs/e1/index.html
 ```
 
 The default LLM backend is the Claude CLI (`claude -p`), which uses your existing
@@ -27,7 +35,7 @@ input ─► ingest ─► bucket + triage ─► AnimationPlan (JSON, editable)
       ─► gallery with review notes ─► revise
 ```
 
-- **Inputs**: transcript (JSON/VTT/SRT/plain), Markdown with `$$` equations, PDF decks and papers, PPTX with speaker notes, audio (faster-whisper), YouTube (captions, audio fallback).
+- **Inputs**: arXiv papers (LaTeX source with an equation ledger), PDF papers and decks, PPTX with speaker notes, Markdown with `$$` equations, transcripts (JSON/VTT/SRT/plain), audio (faster-whisper), YouTube (captions, audio fallback).
 - **Plans** live in `outputs/<run>/plans/*.json` with a Markdown mirror; edit and `render-plan`.
 - **Verification** is deterministic first: API existence against the installed Manim, LaTeX precompile, and a 0.3 s layout probe that executes the scene without rendering. The vision critic only advises.
 - **Outputs**: per-beat GIFs and MP4s, poster PNGs, a PowerPoint deck with one slide per beat, and `manifest.json`.
@@ -58,12 +66,25 @@ Models per tier: `--model-fast`, `--model-strong`, `--model-vision`; effort: `--
 - `outputs/` — run directories with galleries (untracked). See `outputs/README.md` for how to review.
 - `docs/PLAN.md`, `docs/research/` — the plan and the research behind it. `.beryl/agent/` — canonical design docs and ADRs.
 
+## Development
+
+```bash
+uv sync --all-extras --group dev
+.venv/bin/pytest -q                 # full suite; renders one real scene
+.venv/bin/ruff format src tests && .venv/bin/ruff check src tests
+./.beryl/scripts/check.sh           # the deterministic gate
+```
+
+On macOS, see [docs/macos-setup.md](docs/macos-setup.md) for toolchain prerequisites
+and the pycairo workaround.
+
 ## Origin and credits
 
 manim-engineer started at NUS AI Society. [@checkpoint214159](https://github.com/checkpoint214159)
 built the original pipeline (ingest, planning, code generation, verification and rendering).
 
 My contributions since then:
+
 - **Source fidelity for arXiv papers.** An arXiv LaTeX ingest adapter that builds an equation
   ledger and carries source equations into each animation plan word for word. A verification check
   blocks any render whose equations were changed or dropped (ADR 0007).
@@ -71,6 +92,7 @@ My contributions since then:
   clips (ADR 0008).
 - **Approval pins.** `approve` pins a concept's plan and accepted code. Re-runs keep approved
   concepts, and the deck is built only from them (ADR 0009).
-- macOS setup docs and test-manifest fixes.
+- [macOS setup docs](docs/macos-setup.md) and test-manifest fixes.
 
-Contributors: @checkpoint214159, @Aryan-Dalvi, Archit.
+Contributors: [@checkpoint214159](https://github.com/checkpoint214159),
+[@Aryan-Dalvi](https://github.com/Aryan-Dalvi), [@architsharma69](https://github.com/architsharma69).
